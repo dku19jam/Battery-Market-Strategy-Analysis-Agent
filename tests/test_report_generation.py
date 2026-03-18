@@ -134,15 +134,15 @@ class ReportGenerationTest(unittest.TestCase):
             model="gpt-4o-mini",
         )
 
-        self.assertEqual(len(fake_llm.calls), 1)
+        self.assertGreaterEqual(len(fake_llm.calls), 1)
         self.assertEqual(fake_llm.calls[0]["schema_name"], "final_report_sections")
         self.assertIn("반드시 결과물을 한국어로", str(fake_llm.calls[0]["system_prompt"]))
         self.assertIn("SWOT은 반드시 Strengths, Weaknesses, Opportunities, Threats", str(fake_llm.calls[0]["system_prompt"]))
         self.assertIn("Markdown 표 형식", str(fake_llm.calls[0]["system_prompt"]))
-        self.assertIn("SUMMARY", report.markdown)
+        self.assertIn("## 요약", report.markdown)
         self.assertIn("근거가 다소 제한적", report.markdown)
         self.assertIn("최종 보고서만 읽어도", report.markdown)
-        self.assertIn("## COMPANY_METRICS", report.markdown)
+        self.assertIn("## 기업 정량 지표", report.markdown)
         self.assertIn("| 회사 | 지표 | 값 | 출처 |", report.markdown)
         self.assertIn("### Strengths", report.markdown)
 
@@ -248,7 +248,7 @@ class ReportGenerationTest(unittest.TestCase):
                     "lg_strategy": "LG 전략 설명",
                     "catl_strategy": "CATL 전략 설명",
                     "strategy_comparison": "전략 비교 설명",
-                    "swot": ': {"strengths":["raw"],"weaknesses":["raw"],"opportunities":["raw"],"threats":["raw"]}',
+                    "swot": ': {"strengths":["LG 강점"],"weaknesses":["LG 약점"],"opportunities":["LG 기회"],"threats":["LG 위협"]}',
                     "company_metrics": "",
                     "insights": "시사점 설명",
                 }

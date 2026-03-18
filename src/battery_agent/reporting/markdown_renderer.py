@@ -18,6 +18,17 @@ REQUIRED_SECTIONS = [
     "INSIGHTS",
     "REFERENCE",
 ]
+SECTION_TITLES_KO = {
+    "SUMMARY": "요약",
+    "MARKET_BACKGROUND": "시장 배경",
+    "LG_STRATEGY": "LG 전략",
+    "CATL_STRATEGY": "CATL 전략",
+    "STRATEGY_COMPARISON": "전략 비교",
+    "COMPANY_METRICS": "기업 정량 지표",
+    "SWOT": "SWOT 분석",
+    "INSIGHTS": "핵심 시사점",
+    "REFERENCE": "참고자료",
+}
 SUMMARY_CHAR_LIMIT = 1200
 
 
@@ -36,7 +47,7 @@ def render_report_markdown(
     if failure_message:
         parts.extend([f"> FAILURE NOTICE: {failure_message}", ""])
     for section in REQUIRED_SECTIONS:
-        parts.append(f"## {section}")
+        parts.append(f"## {SECTION_TITLES_KO.get(section, section)}")
         parts.append(normalized_sections.get(section, ""))
         parts.append("")
     return "\n".join(parts).strip() + "\n"

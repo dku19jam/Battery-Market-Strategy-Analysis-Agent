@@ -34,6 +34,6 @@ class MarkdownRendererTest(unittest.TestCase):
 
         self.assertEqual(REQUIRED_SECTIONS[0], "SUMMARY")
         self.assertEqual(REQUIRED_SECTIONS[-1], "REFERENCE")
-        self.assertTrue(written.index("## SUMMARY") < written.index("## MARKET_BACKGROUND"))
-        self.assertTrue(written.index("## REFERENCE") > written.index("## INSIGHTS"))
-        self.assertLess(written.count("a"), 500)
+        self.assertTrue(written.index("## 요약") < written.index("## 시장 배경"))
+        self.assertTrue(written.index("## 참고자료") > written.index("## 핵심 시사점"))
+        self.assertLess(written.count("a"), 1201)

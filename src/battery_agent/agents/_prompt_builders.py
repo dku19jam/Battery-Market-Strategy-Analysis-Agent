@@ -166,6 +166,8 @@ def report_system_prompt() -> str:
         "summary 생성 시 증거가 부족해도 만들어 낼 수 있는 최선의 결과물을 만들어내고 "
         "증거가 조금 부족하다는 정도의 코멘트를 추가할 것. "
         "각 항목의 내용은 최종 보고서만으로도 파악이 가능하게 세세히 작성할 것. "
+        "모든 보고서 본문 문장과 항목은 오직 한국어로만 작성한다. "
+        "영문 본문은 허용하지 않으며, 고유명사/기관명/URL/영문 약어가 필요한 경우를 제외하고 번역해서 작성한다. "
         "각 항목은 최소 2개 이상의 단락(또는 5개 이상 bullet)을 포함해 충분한 분석 깊이로 작성할 것. "
         "SWOT은 반드시 Strengths, Weaknesses, Opportunities, Threats 항목별로 나누어 작성할 것. "
         "MARKET_BACKGROUND: 배경/맥락/정량 추세(있으면 수치), LG 전략 관련 시사점, CATL 전략 관련 시사점을 모두 포함할 것.\n"
@@ -228,6 +230,11 @@ def report_user_prompt(
     payload["available_documents"] = sorted(set(references))
     payload["lg_reference_buckets"] = sorted(set(lg_analysis.citations))
     payload["catl_reference_buckets"] = sorted(set(catl_analysis.citations))
+    payload["output_language_checklist"] = [
+        "각 문단은 한국어로 작성",
+        "영문 본문이 들어가면 즉시 한국어 번역본으로 대체",
+        "표 헤더와 항목 라벨도 한국어로 작성",
+    ]
     return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
