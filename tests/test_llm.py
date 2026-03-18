@@ -49,3 +49,13 @@ class StructuredOpenAIClientTest(unittest.TestCase):
 
         self.assertEqual(payload["strategy_summary"], "ok")
         self.assertEqual(len(fake_client.responses.calls), 2)
+
+
+class PromptSchemaTest(unittest.TestCase):
+    def test_comparison_schema_disallows_additional_properties_in_nested_items(self) -> None:
+        from battery_agent.agents._prompt_builders import comparison_schema
+
+        schema = comparison_schema()
+        item_schema = schema["properties"]["normalized_companies"]["items"]
+
+        self.assertFalse(item_schema["additionalProperties"])

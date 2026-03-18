@@ -96,22 +96,86 @@ class RetrievalAgentTest(unittest.TestCase):
                 ]
 
         class FakeWebSearcher:
+            def __init__(self) -> None:
+                self.queries: list[str] = []
+
             def search(self, query: str) -> list[object]:
-                raise AssertionError("web search should not be called")
+                self.queries.append(query)
+                return []
 
         from battery_agent.agents.catl_retrieval import run_catl_retrieval
 
+        web_searcher = FakeWebSearcher()
         result = run_catl_retrieval(
             topic="배터리 시장 전략 비교",
             local_retriever=FakeLocalRetriever(),
-            web_searcher=FakeWebSearcher(),
+            web_searcher=web_searcher,
             min_hits=2,
         )
 
         self.assertEqual(result.company, "CATL")
         self.assertEqual(result.next_action, "curation")
         self.assertFalse(result.used_web_search)
+        self.assertEqual(len(web_searcher.queries), 1)
         self.assertEqual(len(result.items), 2)
+
+    def test_retrieval_always_runs_web_search_and_merges_results(self) -> None:
+        from battery_agent.agents.lg_retrieval import run_lg_retrieval
+        from battery_agent.models.retrieval import RetrievalItem
+        from battery_agent.search.web_search import WebSearchResult
+
+        class FakeLocalRetriever:
+            def search(self, company: str, queries: list[str], top_k: int = 5) -> list[RetrievalItem]:
+                return [
+                    RetrievalItem(
+                        document_id="local-doc",
+                        chunk_id="local-doc-chunk-1",
+                        title="LG local",
+                        text="local strategy evidence",
+                        score=0.95,
+                        source_type="report",
+                        source="local",
+                        topics=["strategy"],
+                    ),
+                    RetrievalItem(
+                        document_id="local-risk",
+                        chunk_id="local-risk-chunk-1",
+                        title="LG risk",
+                        text="local risk evidence",
+                        score=0.9,
+                        source_type="report",
+                        source="local",
+                        topics=["risk"],
+                    ),
+                ]
+
+        class FakeWebSearcher:
+            def __init__(self) -> None:
+                self.queries: list[str] = []
+
+            def search(self, query: str) -> list[WebSearchResult]:
+                self.queries.append(query)
+                return [
+                    WebSearchResult(
+                        title="LG web",
+                        url="https://example.com/lg",
+                        source="example.com",
+                        snippet="web market evidence",
+                    )
+                ]
+
+        web_searcher = FakeWebSearcher()
+        result = run_lg_retrieval(
+            topic="배터리 시장 전략 비교",
+            local_retriever=FakeLocalRetriever(),
+            web_searcher=web_searcher,
+            min_hits=2,
+        )
+
+        self.assertTrue(result.used_web_search)
+        self.assertEqual(len(web_searcher.queries), 1)
+        self.assertEqual(len(result.items), 3)
+        self.assertTrue(any(item.source_type == "web" for item in result.items))
 
 
 class CurationAgentTest(unittest.TestCase):

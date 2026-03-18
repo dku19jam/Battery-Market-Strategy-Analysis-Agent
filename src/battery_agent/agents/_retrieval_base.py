@@ -36,7 +36,7 @@ def run_retrieval_agent(
     ]
     used_web_search = False
 
-    if len(items) < min_hits and web_searcher is not None:
+    if web_searcher is not None:
         web_query = rewrite_query(f"{company} {topic}", "portfolio diversification")
         web_items = [
             RetrievalItem(

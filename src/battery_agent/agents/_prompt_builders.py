@@ -84,7 +84,7 @@ def comparison_schema() -> dict[str, object]:
                         "risks": {"type": "array", "items": {"type": "string"}},
                     },
                     "required": ["company", "strategy_summary", "strengths", "risks"],
-                    "additionalProperties": True,
+                    "additionalProperties": False,
                 },
             },
             "strategy_differences": {"type": "array", "items": {"type": "string"}},
