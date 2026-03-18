@@ -61,6 +61,29 @@ class Settings:
     chroma_collection: str = "battery-agent"
     embedding_device: str = "auto"
     embedding_batch_size: int = 4
+    pdf_min_document_words: int = 200
+    pdf_min_page_words: int = 50
+    pdf_focus_keywords: tuple[str, ...] = (
+        "전략",
+        "사업전략",
+        "리스크",
+        "공급망",
+        "시장",
+        "배터리",
+        "매출",
+        "실적",
+        "경쟁력",
+        "포트폴리오",
+        "ESG",
+        "수익",
+        "글로벌",
+        "파이낸스",
+        "재무",
+        "전기차",
+        "ESS",
+        "투자",
+        "R&D",
+    )
 
     @classmethod
     def from_env(cls, env_path: Path | None = None) -> "Settings":
@@ -96,7 +119,7 @@ class Settings:
             web_search_enabled=_env_flag(
                 "BATTERY_AGENT_WEB_SEARCH",
                 dotenv_values,
-                default=False,
+                default=True,
             ),
             web_search_max_calls=int(
                 _env_value("BATTERY_AGENT_WEB_SEARCH_MAX_CALLS", dotenv_values) or "3"
@@ -110,4 +133,27 @@ class Settings:
             embedding_batch_size=int(
                 _env_value("BATTERY_AGENT_EMBEDDING_BATCH_SIZE", dotenv_values) or "4"
             ),
+            pdf_min_document_words=int(
+                _env_value("BATTERY_AGENT_PDF_MIN_DOCUMENT_WORDS", dotenv_values) or "200"
+            ),
+            pdf_min_page_words=int(
+                _env_value("BATTERY_AGENT_PDF_MIN_PAGE_WORDS", dotenv_values) or "50"
+            ),
+            pdf_focus_keywords=_parse_comma_keywords(
+                _env_value(
+                    "BATTERY_AGENT_PDF_FOCUS_KEYWORDS",
+                    dotenv_values,
+                )
+            ),
         )
+
+
+def _parse_comma_keywords(value: str | None) -> tuple[str, ...]:
+    fallback = ",".join(
+        (
+            "전략,사업전략,리스크,공급망,시장,배터리,매출,실적,경쟁력,포트폴리오,"
+            "ESG,수익,글로벌,파이낸스,재무,전기차,ESS,투자,R&D"
+        ).split(",")
+    )
+    raw_value = value if value is not None and value.strip() else fallback
+    return tuple(item.strip() for item in raw_value.split(",") if item.strip())

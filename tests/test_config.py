@@ -20,7 +20,7 @@ class ConfigTest(unittest.TestCase):
         self.assertIsNone(settings.tavily_api_key)
         self.assertEqual(settings.web_search_max_calls, 3)
         self.assertEqual(settings.web_search_max_results, 5)
-        self.assertFalse(settings.web_search_enabled)
+        self.assertTrue(settings.web_search_enabled)
 
     def test_from_env_raises_clear_error_without_api_key(self) -> None:
         from battery_agent.config import ConfigError, Settings
