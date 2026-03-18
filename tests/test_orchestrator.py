@@ -6,6 +6,317 @@ from unittest.mock import patch
 
 
 class OrchestratorTest(unittest.TestCase):
+    def test_maybe_run_refinement_retries_only_low_quality_lane(self) -> None:
+        from battery_agent.config import Settings
+        from battery_agent.models.analysis import CompanyAnalysisResult
+        from battery_agent.models.evidence import EvidenceBundle, EvidenceItem
+        from battery_agent.models.report import ComparisonResult, SWOTSection
+        from battery_agent.models.retrieval import RetrievalItem, RetrievalResult
+        from battery_agent.models.run_context import RunContext
+        from battery_agent.pipeline.orchestrator import maybe_run_refinement_retries
+        from battery_agent.pipeline.workflow_state import LaneState, WorkflowState
+
+        low_analysis = CompanyAnalysisResult(
+            company="CATL",
+            strategy_summary="전략 근거 부족",
+            strengths=["전략 근거 부족"],
+            risks=["리스크 근거 부족"],
+            citations=[],
+            partial=True,
+        )
+        low_bundle = EvidenceBundle(
+            company="CATL",
+            topics=["strategy"],
+            entries=[
+                EvidenceItem(
+                    document_id="catl-1",
+                    snippet="short",
+                    source_type="web",
+                    source="unknown",
+                    topics=["strategy"],
+                    score=0.1,
+                )
+            ],
+            topic_buckets={},
+            missing_topics=["risk"],
+            next_action="analysis",
+        )
+        low_retrieval = RetrievalResult(
+            company="CATL",
+            queries=["q"],
+            items=[
+                RetrievalItem(
+                    document_id="catl-1",
+                    chunk_id="chunk-1",
+                    title="t",
+                    text="short",
+                    score=0.1,
+                    source_type="web",
+                    source="unknown",
+                    topics=["strategy"],
+                )
+            ],
+            next_action="curation",
+            used_web_search=False,
+            partial=False,
+        )
+        high_analysis = CompanyAnalysisResult(
+            company="LG에너지솔루션",
+            strategy_summary="요약",
+            strengths=["강점1", "강점2"],
+            risks=["리스크1", "리스크2"],
+            citations=["doc-1", "doc-2", "doc-3"],
+            partial=False,
+        )
+        high_bundle = EvidenceBundle(
+            company="LG에너지솔루션",
+            topics=["strategy", "risk"],
+            entries=[
+                EvidenceItem(
+                    document_id="doc-1",
+                    snippet="a",
+                    source_type="report",
+                    source="trusted",
+                    topics=["strategy"],
+                    score=0.9,
+                ),
+                EvidenceItem(
+                    document_id="doc-2",
+                    snippet="b",
+                    source_type="report",
+                    source="trusted",
+                    topics=["risk"],
+                    score=0.8,
+                ),
+                EvidenceItem(
+                    document_id="doc-3",
+                    snippet="c",
+                    source_type="report",
+                    source="trusted",
+                    topics=["strategy", "risk"],
+                    score=0.7,
+                ),
+            ],
+            topic_buckets={},
+            missing_topics=[],
+            next_action="analysis",
+        )
+        high_retrieval = RetrievalResult(
+            company="LG에너지솔루션",
+            queries=["q"],
+            items=[],
+            next_action="curation",
+            used_web_search=True,
+            partial=False,
+        )
+        comparison = ComparisonResult(
+            normalized_companies=[],
+            strategy_differences=["d"],
+            strengths_weaknesses=["s"],
+            swot=SWOTSection(),
+            insights=["i"],
+            refinement_requests=["LG에너지솔루션", "CATL"],
+            next_action="analysis_refinement",
+        )
+        state = WorkflowState(
+            run_context=RunContext(run_id="r1", topic="t", output_dir="o"),
+            model_name="gpt-4o-mini",
+            corpus_fingerprint="abc",
+            search_params={},
+            lg_lane=LaneState(
+                company="LG에너지솔루션",
+                retrieval_result=high_retrieval,
+                evidence_bundle=high_bundle,
+                analysis_result=high_analysis,
+            ),
+            catl_lane=LaneState(
+                company="CATL",
+                retrieval_result=low_retrieval,
+                evidence_bundle=low_bundle,
+                analysis_result=low_analysis,
+            ),
+            comparison_result=comparison,
+        )
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            settings = Settings(
+                openai_api_key="test-key",
+                default_companies=("LG에너지솔루션", "CATL"),
+                default_model="gpt-4o-mini",
+                embedding_model_id="Qwen/Qwen3-Embedding-0.6B",
+                default_topic="배터리 시장 전략 비교",
+                local_corpus_dir=Path(tmp_dir) / "corpus",
+                output_root=Path(tmp_dir) / "artifacts",
+                tavily_api_key=None,
+                web_search_enabled=False,
+                web_search_max_calls=6,
+                web_search_max_results=5,
+            )
+            settings.local_corpus_dir.mkdir(parents=True, exist_ok=True)
+            run_root = settings.output_root / "run-1"
+            run_root.mkdir(parents=True, exist_ok=True)
+            run_paths = type("RunPaths", (), {"root": run_root})
+
+            with patch(
+                "battery_agent.pipeline.orchestrator.run_lane_pipeline",
+            ) as run_lane_pipeline_mock:
+                reran = maybe_run_refinement_retries(
+                    state=state,
+                    settings=settings,
+                    topic="배터리 시장 전략 비교",
+                    run_paths=run_paths,
+                    local_retriever=object(),
+                    structured_llm=object(),
+                    logger=None,
+                )
+
+        self.assertTrue(reran)
+        self.assertEqual(run_lane_pipeline_mock.call_count, 1)
+        self.assertEqual(run_lane_pipeline_mock.call_args.kwargs["lane"].company, "CATL")
+
+    def test_lane_quality_score_and_relaxed_refinement_retry_policy(self) -> None:
+        from battery_agent.models.analysis import CompanyAnalysisResult
+        from battery_agent.models.evidence import EvidenceBundle, EvidenceItem
+        from battery_agent.models.retrieval import RetrievalItem, RetrievalResult
+        from battery_agent.pipeline.orchestrator import (
+            lane_quality_score,
+            should_retry_refinement,
+        )
+
+        low_quality_analysis = CompanyAnalysisResult(
+            company="CATL",
+            strategy_summary="전략 근거 부족",
+            strengths=["전략 근거 부족"],
+            risks=["리스크 근거 부족"],
+            citations=[],
+            analysis_notes="insufficient",
+            partial=True,
+        )
+        low_quality_bundle = EvidenceBundle(
+            company="CATL",
+            topics=["strategy"],
+            entries=[
+                EvidenceItem(
+                    document_id="doc-1",
+                    snippet="short",
+                    source_type="web",
+                    source="unknown",
+                    topics=["strategy"],
+                    score=0.1,
+                )
+            ],
+            topic_buckets={},
+            missing_topics=["risk"],
+            next_action="analysis",
+        )
+        low_quality_retrieval = RetrievalResult(
+            company="CATL",
+            queries=["q"],
+            items=[
+                RetrievalItem(
+                    document_id="doc-1",
+                    chunk_id="chunk-1",
+                    title="t",
+                    text="short",
+                    score=0.1,
+                    source_type="web",
+                    source="unknown",
+                    topics=["strategy"],
+                )
+            ],
+            next_action="curation",
+            used_web_search=False,
+            partial=False,
+        )
+        high_quality_analysis = CompanyAnalysisResult(
+            company="LG에너지솔루션",
+            strategy_summary="전략 요약",
+            strengths=["강점 1", "강점 2"],
+            risks=["리스크 1", "리스크 2"],
+            citations=["doc-a", "doc-b", "doc-c"],
+            analysis_notes="ok",
+            partial=False,
+        )
+        high_quality_bundle = EvidenceBundle(
+            company="LG에너지솔루션",
+            topics=["strategy", "risk"],
+            entries=[
+                EvidenceItem(
+                    document_id="doc-a",
+                    snippet="e1",
+                    source_type="report",
+                    source="trusted",
+                    topics=["strategy"],
+                    score=0.9,
+                ),
+                EvidenceItem(
+                    document_id="doc-b",
+                    snippet="e2",
+                    source_type="report",
+                    source="trusted",
+                    topics=["risk"],
+                    score=0.8,
+                ),
+                EvidenceItem(
+                    document_id="doc-c",
+                    snippet="e3",
+                    source_type="report",
+                    source="trusted",
+                    topics=["strategy", "risk"],
+                    score=0.7,
+                ),
+            ],
+            topic_buckets={},
+            missing_topics=[],
+            next_action="analysis",
+        )
+        high_quality_retrieval = RetrievalResult(
+            company="LG에너지솔루션",
+            queries=["q"],
+            items=[
+                RetrievalItem(
+                    document_id="doc-a",
+                    chunk_id="chunk-a",
+                    title="t",
+                    text="e1",
+                    score=0.9,
+                    source_type="report",
+                    source="trusted",
+                    topics=["strategy"],
+                )
+            ],
+            next_action="curation",
+            used_web_search=True,
+            partial=False,
+        )
+
+        self.assertLess(
+            lane_quality_score(low_quality_analysis, low_quality_bundle, low_quality_retrieval),
+            lane_quality_score(high_quality_analysis, high_quality_bundle, high_quality_retrieval),
+        )
+        self.assertTrue(
+            should_retry_refinement(
+                quality_score=lane_quality_score(
+                    low_quality_analysis,
+                    low_quality_bundle,
+                    low_quality_retrieval,
+                ),
+                retries=0,
+                max_retries=1,
+            )
+        )
+        self.assertFalse(
+            should_retry_refinement(
+                quality_score=lane_quality_score(
+                    high_quality_analysis,
+                    high_quality_bundle,
+                    high_quality_retrieval,
+                ),
+                retries=0,
+                max_retries=1,
+            )
+        )
+
     def test_allocate_web_search_calls_splits_evenly(self) -> None:
         from battery_agent.pipeline.orchestrator import allocate_web_search_calls
 

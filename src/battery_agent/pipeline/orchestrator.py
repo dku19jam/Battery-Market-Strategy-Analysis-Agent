@@ -39,6 +39,11 @@ from battery_agent.search.web_search import build_tavily_web_searcher
 from battery_agent.pipeline.handoffs import final_workflow_status
 from battery_agent.pipeline.workflow_state import LaneState, WorkflowState
 
+MAX_EVIDENCE_RETRY = 1
+MAX_REFINEMENT_RETRY = 1
+REFINEMENT_RETRY_QUALITY_THRESHOLD = 2.5
+MIN_ACCEPTABLE_EVIDENCE_ENTRIES = 2
+
 
 def run_analysis_workflow(
     settings: Settings,
@@ -67,48 +72,40 @@ def run_analysis_workflow(
     )
 
     local_retriever = build_local_retriever(settings=settings, run_root=run_paths.root, logger=logger)
-    lg_web_searcher, catl_web_searcher = build_company_web_searchers(settings)
     structured_llm = llm_client or StructuredOpenAIClient(api_key=settings.openai_api_key)
 
-    workflow_state.lg_lane.retrieval_result = run_lg_retrieval(
+    run_lane_pipeline(
+        lane=workflow_state.lg_lane,
         topic=topic,
+        settings=settings,
+        run_paths=run_paths,
         local_retriever=local_retriever,
-        web_searcher=lg_web_searcher,
-        artifact_path=artifact_path_for(run_paths, "retrieval", "lg_retrieval"),
+        structured_llm=structured_llm,
+        retrieval_runner=run_lg_retrieval,
+        curation_runner=run_lg_curation,
+        analysis_runner=run_lg_analysis,
+        retrieval_key="lg_retrieval",
+        evidence_key="lg_curation",
+        analysis_key="lg_analysis",
+        logger=logger,
+        allow_evidence_retry=True,
     )
-    workflow_state.lg_lane.evidence_bundle = run_lg_curation(
-        workflow_state.lg_lane.retrieval_result,
-        artifact_path=artifact_path_for(run_paths, "evidence", "lg_curation"),
-    )
-    workflow_state.lg_lane.analysis_result = run_lg_analysis(
-        workflow_state.lg_lane.evidence_bundle,
-        llm_client=structured_llm,
-        model=settings.default_model,
-        artifact_path=artifact_path_for(run_paths, "analysis", "lg_analysis"),
-    )
-    workflow_state.lg_lane.used_sources = list(workflow_state.lg_lane.analysis_result.citations)
-    workflow_state.lg_lane.partial = workflow_state.lg_lane.analysis_result.partial
-    workflow_state.lg_lane.status = "completed"
-
-    workflow_state.catl_lane.retrieval_result = run_catl_retrieval(
+    run_lane_pipeline(
+        lane=workflow_state.catl_lane,
         topic=topic,
+        settings=settings,
+        run_paths=run_paths,
         local_retriever=local_retriever,
-        web_searcher=catl_web_searcher,
-        artifact_path=artifact_path_for(run_paths, "retrieval", "catl_retrieval"),
+        structured_llm=structured_llm,
+        retrieval_runner=run_catl_retrieval,
+        curation_runner=run_catl_curation,
+        analysis_runner=run_catl_analysis,
+        retrieval_key="catl_retrieval",
+        evidence_key="catl_curation",
+        analysis_key="catl_analysis",
+        logger=logger,
+        allow_evidence_retry=True,
     )
-    workflow_state.catl_lane.evidence_bundle = run_catl_curation(
-        workflow_state.catl_lane.retrieval_result,
-        artifact_path=artifact_path_for(run_paths, "evidence", "catl_curation"),
-    )
-    workflow_state.catl_lane.analysis_result = run_catl_analysis(
-        workflow_state.catl_lane.evidence_bundle,
-        llm_client=structured_llm,
-        model=settings.default_model,
-        artifact_path=artifact_path_for(run_paths, "analysis", "catl_analysis"),
-    )
-    workflow_state.catl_lane.used_sources = list(workflow_state.catl_lane.analysis_result.citations)
-    workflow_state.catl_lane.partial = workflow_state.catl_lane.analysis_result.partial
-    workflow_state.catl_lane.status = "completed"
 
     workflow_state.comparison_result = run_comparison(
         workflow_state.lg_lane.analysis_result,
@@ -117,6 +114,25 @@ def run_analysis_workflow(
         model=settings.default_model,
         artifact_path=artifact_path_for(run_paths, "analysis", "comparison"),
     )
+    reran_for_refinement = False
+    if workflow_state.comparison_result.next_action == "analysis_refinement":
+        reran_for_refinement = maybe_run_refinement_retries(
+            state=workflow_state,
+            settings=settings,
+            topic=topic,
+            run_paths=run_paths,
+            local_retriever=local_retriever,
+            structured_llm=structured_llm,
+            logger=logger,
+        )
+        if reran_for_refinement:
+            workflow_state.comparison_result = run_comparison(
+                workflow_state.lg_lane.analysis_result,
+                workflow_state.catl_lane.analysis_result,
+                llm_client=structured_llm,
+                model=settings.default_model,
+                artifact_path=artifact_path_for(run_paths, "analysis", "comparison"),
+            )
     workflow_state.reference_result = build_references(
         evidence_bundles=[workflow_state.lg_lane.evidence_bundle, workflow_state.catl_lane.evidence_bundle],
         analyses=[workflow_state.lg_lane.analysis_result, workflow_state.catl_lane.analysis_result],
@@ -155,20 +171,22 @@ def build_company_web_searchers(settings: Settings) -> tuple[object | None, obje
     if not settings.web_search_enabled or not settings.tavily_api_key:
         return None, None
 
-    lg_calls, catl_calls = allocate_web_search_calls(settings.web_search_max_calls)
-    lg_searcher = build_tavily_web_searcher(
-        api_key=settings.tavily_api_key,
-        max_results=settings.web_search_max_results,
-        max_per_source=settings.web_search_max_per_source,
-        max_calls=lg_calls,
-    )
-    catl_searcher = build_tavily_web_searcher(
-        api_key=settings.tavily_api_key,
-        max_results=settings.web_search_max_results,
-        max_per_source=settings.web_search_max_per_source,
-        max_calls=catl_calls,
-    )
+    lg_searcher = build_company_web_searcher(settings, "LG에너지솔루션")
+    catl_searcher = build_company_web_searcher(settings, "CATL")
     return lg_searcher, catl_searcher
+
+
+def build_company_web_searcher(settings: Settings, company: str) -> object | None:
+    if not settings.web_search_enabled or not settings.tavily_api_key:
+        return None
+    lg_calls, catl_calls = allocate_web_search_calls(settings.web_search_max_calls)
+    max_calls = lg_calls if company == "LG에너지솔루션" else catl_calls
+    return build_tavily_web_searcher(
+        api_key=settings.tavily_api_key,
+        max_results=settings.web_search_max_results,
+        max_per_source=settings.web_search_max_per_source,
+        max_calls=max_calls,
+    )
 
 
 def allocate_web_search_calls(total_calls: int) -> tuple[int, int]:
@@ -177,6 +195,188 @@ def allocate_web_search_calls(total_calls: int) -> tuple[int, int]:
     lg_calls = max(1, total_calls // 2)
     catl_calls = max(1, total_calls - lg_calls)
     return lg_calls, catl_calls
+
+
+def lane_quality_score(
+    analysis_result: object | None,
+    evidence_bundle: object | None,
+    retrieval_result: object | None,
+) -> float:
+    if analysis_result is None or evidence_bundle is None or retrieval_result is None:
+        return 0.0
+
+    score = 0.0
+    citations = len(getattr(analysis_result, "citations", []))
+    metrics = len(getattr(analysis_result, "metrics", []))
+    topics = set(getattr(evidence_bundle, "topics", []))
+    entries = len(getattr(evidence_bundle, "entries", []))
+    used_web = bool(getattr(retrieval_result, "used_web_search", False))
+    text_fragments = (
+        list(getattr(analysis_result, "strengths", []))
+        + list(getattr(analysis_result, "risks", []))
+        + [str(getattr(analysis_result, "strategy_summary", ""))]
+    )
+
+    score += min(1.5, citations * 0.5)
+    score += min(1.0, metrics * 0.5)
+    score += 1.0 if "strategy" in topics else 0.0
+    score += 0.6 if "risk" in topics else 0.0
+    score += 0.5 if entries >= 6 else (0.2 if entries >= 2 else 0.0)
+    score += 0.2 if used_web else 0.0
+
+    if any("근거 부족" in fragment for fragment in text_fragments):
+        score -= 0.8
+    return score
+
+
+def should_retry_refinement(quality_score: float, retries: int, max_retries: int) -> bool:
+    return retries < max_retries and quality_score < REFINEMENT_RETRY_QUALITY_THRESHOLD
+
+
+def should_retry_evidence(
+    evidence_bundle: object | None,
+    retrieval_result: object | None,
+    retries: int,
+    max_retries: int,
+) -> bool:
+    if retries >= max_retries or evidence_bundle is None or retrieval_result is None:
+        return False
+    entries = len(getattr(evidence_bundle, "entries", []))
+    topics = set(getattr(evidence_bundle, "topics", []))
+    missing_topics = set(getattr(evidence_bundle, "missing_topics", []))
+    if entries < MIN_ACCEPTABLE_EVIDENCE_ENTRIES:
+        return True
+    if "strategy" not in topics:
+        return True
+    return "strategy" in missing_topics and entries < 4
+
+
+def run_lane_pipeline(
+    *,
+    lane: LaneState,
+    topic: str,
+    settings: Settings,
+    run_paths: object,
+    local_retriever: object,
+    structured_llm: object,
+    retrieval_runner: object,
+    curation_runner: object,
+    analysis_runner: object,
+    retrieval_key: str,
+    evidence_key: str,
+    analysis_key: str,
+    logger: object | None,
+    allow_evidence_retry: bool,
+) -> None:
+    evidence_retries = lane.retries.get("evidence", 0)
+    while True:
+        web_searcher = build_company_web_searcher(settings, lane.company)
+        lane.retrieval_result = retrieval_runner(
+            topic=topic,
+            local_retriever=local_retriever,
+            web_searcher=web_searcher,
+            artifact_path=artifact_path_for(run_paths, "retrieval", retrieval_key),
+        )
+        lane.evidence_bundle = curation_runner(
+            lane.retrieval_result,
+            artifact_path=artifact_path_for(run_paths, "evidence", evidence_key),
+        )
+        lane.analysis_result = analysis_runner(
+            lane.evidence_bundle,
+            llm_client=structured_llm,
+            model=settings.default_model,
+            artifact_path=artifact_path_for(run_paths, "analysis", analysis_key),
+        )
+        lane.used_sources = list(lane.analysis_result.citations)
+        lane.partial = lane.analysis_result.partial
+        lane.status = "completed"
+        if not allow_evidence_retry:
+            break
+        if not should_retry_evidence(
+            lane.evidence_bundle,
+            lane.retrieval_result,
+            retries=evidence_retries,
+            max_retries=MAX_EVIDENCE_RETRY,
+        ):
+            break
+        evidence_retries += 1
+        lane.retries["evidence"] = evidence_retries
+        lane.last_action = "retry_evidence"
+        if logger is not None:
+            logger.info("retry evidence lane=%s attempt=%s", lane.company, evidence_retries)
+    lane.retries["evidence"] = evidence_retries
+
+
+def maybe_run_refinement_retries(
+    *,
+    state: WorkflowState,
+    settings: Settings,
+    topic: str,
+    run_paths: object,
+    local_retriever: object,
+    structured_llm: object,
+    logger: object | None,
+) -> bool:
+    requested = set(state.comparison_result.refinement_requests)
+    reran = False
+    lane_specs = [
+        (
+            state.lg_lane,
+            run_lg_retrieval,
+            run_lg_curation,
+            run_lg_analysis,
+            "lg_retrieval",
+            "lg_curation",
+            "lg_analysis",
+        ),
+        (
+            state.catl_lane,
+            run_catl_retrieval,
+            run_catl_curation,
+            run_catl_analysis,
+            "catl_retrieval",
+            "catl_curation",
+            "catl_analysis",
+        ),
+    ]
+    for lane, retrieval_runner, curation_runner, analysis_runner, retrieval_key, evidence_key, analysis_key in lane_specs:
+        if lane.company not in requested:
+            continue
+        quality = lane_quality_score(lane.analysis_result, lane.evidence_bundle, lane.retrieval_result)
+        retries = lane.retries.get("refinement", 0)
+        if not should_retry_refinement(
+            quality_score=quality,
+            retries=retries,
+            max_retries=MAX_REFINEMENT_RETRY,
+        ):
+            continue
+        lane.retries["refinement"] = retries + 1
+        lane.last_action = "retry_refinement"
+        if logger is not None:
+            logger.info(
+                "retry refinement lane=%s attempt=%s quality=%.2f",
+                lane.company,
+                lane.retries["refinement"],
+                quality,
+            )
+        run_lane_pipeline(
+            lane=lane,
+            topic=topic,
+            settings=settings,
+            run_paths=run_paths,
+            local_retriever=local_retriever,
+            structured_llm=structured_llm,
+            retrieval_runner=retrieval_runner,
+            curation_runner=curation_runner,
+            analysis_runner=analysis_runner,
+            retrieval_key=retrieval_key,
+            evidence_key=evidence_key,
+            analysis_key=analysis_key,
+            logger=logger,
+            allow_evidence_retry=False,
+        )
+        reran = True
+    return reran
 
 
 def build_local_retriever(
@@ -282,12 +482,16 @@ def _workflow_state_dict(state: WorkflowState) -> dict[str, object]:
             "status": state.lg_lane.status,
             "used_sources": state.lg_lane.used_sources,
             "partial": state.lg_lane.partial,
+            "retries": state.lg_lane.retries,
+            "last_action": state.lg_lane.last_action,
         },
         "catl_lane": {
             "company": state.catl_lane.company,
             "status": state.catl_lane.status,
             "used_sources": state.catl_lane.used_sources,
             "partial": state.catl_lane.partial,
+            "retries": state.catl_lane.retries,
+            "last_action": state.catl_lane.last_action,
         },
         "status": state.status,
     }
