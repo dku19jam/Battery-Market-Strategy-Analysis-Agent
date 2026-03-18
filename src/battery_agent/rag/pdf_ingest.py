@@ -11,7 +11,7 @@ from battery_agent.rag.qwen_embedder import QwenEmbeddingClient
 
 def ingest_pdf_corpus(settings: Settings) -> int:
     documents = load_pdf_corpus(settings.local_corpus_dir)
-    chunks = chunk_documents(documents)
+    chunks = chunk_documents(documents, max_total_pages=None)
     embedder = QwenEmbeddingClient(
         model_id=settings.embedding_model_id,
         device=settings.embedding_device,
@@ -22,6 +22,7 @@ def ingest_pdf_corpus(settings: Settings) -> int:
         chroma_dir=settings.chroma_dir,
         collection_name=settings.chroma_collection,
     )
+    store.replace_collection()
     store.upsert_records(
         [
             ChromaRecord(

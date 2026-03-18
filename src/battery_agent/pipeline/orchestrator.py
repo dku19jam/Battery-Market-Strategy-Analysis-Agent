@@ -160,9 +160,10 @@ def build_local_retriever(
     run_root: Path,
     logger: object | None,
 ) -> object:
-    chroma_retriever = open_chroma_retriever(settings=settings, logger=logger)
-    if chroma_retriever is not None:
-        return chroma_retriever
+    if _is_pdf_corpus_layout(settings.local_corpus_dir):
+        chroma_retriever = open_chroma_retriever(settings=settings, logger=logger)
+        if chroma_retriever is not None:
+            return chroma_retriever
     return _build_in_memory_retriever(settings=settings, run_root=run_root, logger=logger)
 
 
@@ -231,6 +232,12 @@ def _build_in_memory_retriever(
         embed_query=lambda query: embedder.embed([query])[0],
         logger=logger,
     )
+
+
+def _is_pdf_corpus_layout(corpus_dir: Path) -> bool:
+    if not corpus_dir.exists():
+        return False
+    return any(company_dir.glob("*.pdf") for company_dir in corpus_dir.iterdir() if company_dir.is_dir())
 
 
 def _workflow_state_dict(state: WorkflowState) -> dict[str, object]:

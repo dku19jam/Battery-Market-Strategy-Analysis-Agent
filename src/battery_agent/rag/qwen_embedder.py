@@ -37,24 +37,45 @@ class QwenEmbeddingClient:
 
     def _embed_texts(self, texts: list[str]) -> list[list[float]]:
         vectors: list[list[float]] = []
-        for offset in range(0, len(texts), self.batch_size):
-            batch = texts[offset : offset + self.batch_size]
-            encoded = self._tokenizer(batch, padding=True, truncation=True, return_tensors="pt")
-            encoded = {
-                key: value.to(self.resolved_device) if hasattr(value, "to") else value
-                for key, value in encoded.items()
-            }
-            with self._torch.no_grad():
-                output = self._model(**encoded)
-            pooled = self._mean_pool(output.last_hidden_state, encoded["attention_mask"])
-            normalized = self._torch.nn.functional.normalize(pooled, p=2, dim=1)
-            if hasattr(normalized, "cpu"):
-                normalized = normalized.cpu()
-            vectors.extend(normalized.tolist())
+        offset = 0
+        batch_size = self.batch_size
+        while offset < len(texts):
+            batch = texts[offset : offset + batch_size]
+            try:
+                vectors.extend(self._embed_batch(batch))
+                offset += len(batch)
+                batch_size = self.batch_size
+            except RuntimeError as exc:
+                if not _is_oom_error(exc):
+                    raise
+                if batch_size > 1:
+                    batch_size = max(1, batch_size // 2)
+                    _empty_mps_cache(self._torch)
+                    continue
+                if self.resolved_device == "mps":
+                    self.resolved_device = "cpu"
+                    self._model = self._model.to(self.resolved_device).eval()
+                    _empty_mps_cache(self._torch)
+                    continue
+                raise
         return vectors
 
+    def _embed_batch(self, batch: list[str]) -> list[list[float]]:
+        encoded = self._tokenizer(batch, padding=True, truncation=True, return_tensors="pt")
+        encoded = {
+            key: value.to(self.resolved_device) if hasattr(value, "to") else value
+            for key, value in encoded.items()
+        }
+        with self._torch.no_grad():
+            output = self._model(**encoded)
+        pooled = self._mean_pool(output.last_hidden_state, encoded["attention_mask"])
+        normalized = self._torch.nn.functional.normalize(pooled, p=2, dim=1)
+        if hasattr(normalized, "cpu"):
+            normalized = normalized.cpu()
+        return normalized.tolist()
+
     def _mean_pool(self, last_hidden_state: object, attention_mask: object) -> object:
-        if hasattr(last_hidden_state, "values") and hasattr(attention_mask, "values"):
+        if _is_fake_tensor(last_hidden_state) and _is_fake_tensor(attention_mask):
             return _fake_mean_pool(last_hidden_state, attention_mask)
 
         expanded_mask = attention_mask.unsqueeze(-1).expand(last_hidden_state.size()).float()
@@ -111,3 +132,18 @@ def _fake_mean_pool(last_hidden_state: object, attention_mask: object) -> object
         mean_value = sum(weighted) / len(weighted)
         pooled.append([mean_value for _ in row])
     return type(last_hidden_state)(pooled)
+
+
+def _is_fake_tensor(value: object) -> bool:
+    values_attr = getattr(value, "values", None)
+    return values_attr is not None and not callable(values_attr)
+
+
+def _is_oom_error(exc: RuntimeError) -> bool:
+    return "out of memory" in str(exc).lower()
+
+
+def _empty_mps_cache(torch_module: object) -> None:
+    mps_module = getattr(torch_module, "mps", None)
+    if mps_module is not None and hasattr(mps_module, "empty_cache"):
+        mps_module.empty_cache()

@@ -2,6 +2,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 class OrchestratorTest(unittest.TestCase):
@@ -120,6 +121,8 @@ class OrchestratorTest(unittest.TestCase):
                 embedding_batch_size=4,
             )
             settings.local_corpus_dir.mkdir(parents=True, exist_ok=True)
+            (settings.local_corpus_dir / "LG에너지솔루션").mkdir()
+            (settings.local_corpus_dir / "LG에너지솔루션" / "lg.pdf").write_bytes(b"%PDF-1.4")
             run_dir = settings.output_root / "run-001"
             run_dir.mkdir(parents=True, exist_ok=True)
 
@@ -136,3 +139,41 @@ class OrchestratorTest(unittest.TestCase):
         self.assertIs(retriever, chroma_retriever)
         chroma_mock.assert_called_once()
         load_corpus_mock.assert_not_called()
+
+    def test_orchestrator_falls_back_to_in_memory_for_non_pdf_corpus(self) -> None:
+        from battery_agent.config import Settings
+        from battery_agent.pipeline.orchestrator import build_local_retriever
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            settings = Settings(
+                openai_api_key="test-key",
+                default_companies=("LG에너지솔루션", "CATL"),
+                default_model="gpt-4o-mini",
+                embedding_model_id="Qwen/Qwen3-Embedding-0.6B",
+                default_topic="배터리 시장 전략 비교",
+                local_corpus_dir=Path(tmp_dir) / "corpus",
+                output_root=Path(tmp_dir) / "artifacts",
+                chroma_dir=Path(tmp_dir) / "chroma",
+                chroma_collection="battery-agent",
+                tavily_api_key=None,
+                web_search_enabled=False,
+                web_search_max_calls=3,
+                web_search_max_results=5,
+                embedding_device="auto",
+                embedding_batch_size=4,
+            )
+            settings.local_corpus_dir.mkdir(parents=True, exist_ok=True)
+            (settings.local_corpus_dir / "docs.jsonl").write_text(
+                '{"document_id":"doc-1","company":"LG에너지솔루션","title":"t","text":"alpha beta","source_type":"report"}\n',
+                encoding="utf-8",
+            )
+            run_dir = settings.output_root / "run-001"
+            run_dir.mkdir(parents=True, exist_ok=True)
+
+            with patch(
+                "battery_agent.pipeline.orchestrator.open_chroma_retriever",
+            ) as chroma_mock:
+                retriever = build_local_retriever(settings=settings, run_root=run_dir, logger=None)
+
+        self.assertIsNotNone(retriever)
+        chroma_mock.assert_not_called()

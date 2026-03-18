@@ -100,6 +100,36 @@ class ChunkerTest(unittest.TestCase):
         self.assertTrue(all(chunk.document_id != "doc-2" for chunk in chunks))
         self.assertGreater(len(payload), 0)
 
+    def test_chunk_documents_can_skip_global_page_limit(self) -> None:
+        from battery_agent.rag.chunker import chunk_documents
+        from battery_agent.rag.corpus_loader import CorpusDocument
+
+        documents = [
+            CorpusDocument(
+                document_id="doc-1",
+                company="LG에너지솔루션",
+                title="LG report",
+                text="alpha beta gamma delta epsilon zeta",
+                source_type="report",
+                page_count=60,
+                topics=["strategy"],
+            ),
+            CorpusDocument(
+                document_id="doc-2",
+                company="CATL",
+                title="CATL report",
+                text="eta theta iota kappa lambda mu",
+                source_type="report",
+                page_count=50,
+                topics=["risk"],
+            ),
+        ]
+
+        chunks = chunk_documents(documents, chunk_size=3, chunk_overlap=1, max_total_pages=None)
+
+        self.assertTrue(any(chunk.document_id == "doc-1" for chunk in chunks))
+        self.assertTrue(any(chunk.document_id == "doc-2" for chunk in chunks))
+
 
 class EmbedderAndVectorIndexTest(unittest.TestCase):
     def test_embedder_uses_cache_and_vector_index_returns_best_match(self) -> None:

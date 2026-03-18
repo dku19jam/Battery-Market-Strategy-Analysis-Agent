@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -25,7 +26,14 @@ class ChromaSearchHit:
 
 
 class ChromaVectorStore:
-    def __init__(self, collection: object) -> None:
+    def __init__(
+        self,
+        collection: object,
+        client: object | None = None,
+        collection_name: str = "",
+    ) -> None:
+        self.client = client
+        self.collection_name = collection_name
         self.collection = collection
 
     @classmethod
@@ -37,7 +45,11 @@ class ChromaVectorStore:
     ) -> "ChromaVectorStore":
         resolved_client = client or _build_client(chroma_dir)
         collection = resolved_client.get_or_create_collection(name=collection_name)
-        return cls(collection=collection)
+        return cls(
+            collection=collection,
+            client=resolved_client,
+            collection_name=collection_name,
+        )
 
     def has_records(self) -> bool:
         count = getattr(self.collection, "count", None)
@@ -45,16 +57,27 @@ class ChromaVectorStore:
             return bool(count())
         return True
 
+    def replace_collection(self) -> None:
+        if self.client is None or not self.collection_name:
+            raise RuntimeError("replace_collection requires a managed Chroma client and collection name.")
+        try:
+            self.client.delete_collection(name=self.collection_name)
+        except Exception:
+            pass
+        self.collection = self.client.get_or_create_collection(name=self.collection_name)
+
     def upsert_records(self, records: list[ChromaRecord]) -> None:
         self.collection.upsert(
             ids=[record.record_id for record in records],
             documents=[record.text for record in records],
             embeddings=[record.embedding for record in records],
             metadatas=[
-                {
-                    **record.metadata,
-                    "document_id": record.document_id,
-                }
+                _serialize_metadata(
+                    {
+                        **record.metadata,
+                        "document_id": record.document_id,
+                    }
+                )
                 for record in records
             ],
         )
@@ -76,7 +99,7 @@ class ChromaVectorStore:
         metadatas = payload.get("metadatas", [[]])[0]
         hits: list[ChromaSearchHit] = []
         for chunk_id, text, distance, metadata in zip(ids, documents, distances, metadatas):
-            resolved_metadata = dict(metadata or {})
+            resolved_metadata = _deserialize_metadata(dict(metadata or {}))
             hits.append(
                 ChromaSearchHit(
                     chunk_id=str(chunk_id),
@@ -100,3 +123,28 @@ def _build_client(chroma_dir: Path) -> object:
         path=str(chroma_dir),
         settings=ChromaSettings(anonymized_telemetry=False),
     )
+
+
+def _serialize_metadata(metadata: dict[str, object]) -> dict[str, object]:
+    serialized: dict[str, object] = {}
+    for key, value in metadata.items():
+        if isinstance(value, list):
+            serialized[key] = json.dumps(value, ensure_ascii=False)
+        else:
+            serialized[key] = value
+    return serialized
+
+
+def _deserialize_metadata(metadata: dict[str, object]) -> dict[str, object]:
+    deserialized: dict[str, object] = {}
+    for key, value in metadata.items():
+        if isinstance(value, str) and value.startswith("[") and value.endswith("]"):
+            try:
+                decoded = json.loads(value)
+            except json.JSONDecodeError:
+                deserialized[key] = value
+                continue
+            deserialized[key] = decoded
+        else:
+            deserialized[key] = value
+    return deserialized

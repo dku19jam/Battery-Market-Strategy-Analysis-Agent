@@ -27,7 +27,7 @@ def chunk_documents(
     documents: list[CorpusDocument],
     chunk_size: int = 200,
     chunk_overlap: int = 40,
-    max_total_pages: int = 100,
+    max_total_pages: int | None = 100,
 ) -> list[TextChunk]:
     if chunk_size <= 0:
         raise ValueError("chunk_size must be positive")
@@ -37,7 +37,7 @@ def chunk_documents(
     chunks: list[TextChunk] = []
     used_pages = 0
     for document in documents:
-        if used_pages + document.page_count > max_total_pages:
+        if max_total_pages is not None and used_pages + document.page_count > max_total_pages:
             break
         used_pages += document.page_count
 
