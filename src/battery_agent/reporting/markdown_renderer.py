@@ -18,7 +18,7 @@ REQUIRED_SECTIONS = [
     "INSIGHTS",
     "REFERENCE",
 ]
-SUMMARY_CHAR_LIMIT = 400
+SUMMARY_CHAR_LIMIT = 1200
 
 
 def render_report_markdown(

@@ -166,8 +166,16 @@ def report_system_prompt() -> str:
         "summary 생성 시 증거가 부족해도 만들어 낼 수 있는 최선의 결과물을 만들어내고 "
         "증거가 조금 부족하다는 정도의 코멘트를 추가할 것. "
         "각 항목의 내용은 최종 보고서만으로도 파악이 가능하게 세세히 작성할 것. "
+        "각 항목은 최소 2개 이상의 단락(또는 5개 이상 bullet)을 포함해 충분한 분석 깊이로 작성할 것. "
         "SWOT은 반드시 Strengths, Weaknesses, Opportunities, Threats 항목별로 나누어 작성할 것. "
-        "회사별 수치화된 데이터가 있으면 Markdown 표 형식으로 COMPANY_METRICS 섹션에 정리할 것. "
+        "MARKET_BACKGROUND: 배경/맥락/정량 추세(있으면 수치), LG 전략 관련 시사점, CATL 전략 관련 시사점을 모두 포함할 것.\n"
+        "LG_STRATEGY: 핵심 전략축(2~4개), 실행 근거(근거 문서), 위험요인, 단기/중기 시사점 4개 항목으로 체계화할 것.\n"
+        "CATL_STRATEGY: 핵심 전략축(2~4개), 실행 근거(근거 문서), 위험요인, 단기/중기 시사점 4개 항목으로 체계화할 것.\n"
+        "STRATEGY_COMPARISON: ① 전략 차이 ② 포지셔닝 차이 ③ 리스크 노출 차이 ④ 수익성/규모/기술 측면 비교를 분리해 서술할 것.\n"
+        "INSIGHTS: 정책/사업부문 의사결정에 바로 쓸 수 있는 실행 제언을 항목별로 제시할 것.\n"
+        "SWOT 항목별로 각 최소 3개 항목, 각 항목 끝에 사용한 문서 ID(예: [doc-id])를 가능하면 추가할 것.\n"
+        "회사별 수치화된 데이터가 있으면 Markdown 표 형식으로 COMPANY_METRICS 섹션에 정리하고, "
+        "문항별로 출처 단서(기업 리포트명 또는 URL의 핵심 식별자)를 함께 남길 것. "
         "Do not invent sources that are not included in the input. "
         "Return valid JSON that matches the schema."
     )
@@ -213,8 +221,13 @@ def report_user_prompt(
             "sections_must_be_self_contained_and_detailed": True,
             "swot_must_be_written_by_category": True,
             "include_company_metrics_markdown_table_when_available": True,
+            "minimum_citation_per_section": 2,
+            "citation_style": "각 섹션 설명 끝에 사용한 근거 문서 ID를 대괄호로 표기",
         },
     }
+    payload["available_documents"] = sorted(set(references))
+    payload["lg_reference_buckets"] = sorted(set(lg_analysis.citations))
+    payload["catl_reference_buckets"] = sorted(set(catl_analysis.citations))
     return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
