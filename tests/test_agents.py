@@ -235,6 +235,46 @@ class CurationAgentTest(unittest.TestCase):
         self.assertEqual(len(bundle.topic_buckets["strategy"]), 1)
         self.assertEqual(payload["next_action"], "analysis")
 
+    def test_lg_curation_prioritizes_trusted_web_sources(self) -> None:
+        from battery_agent.agents.lg_curation import run_lg_curation
+        from battery_agent.models.retrieval import RetrievalItem, RetrievalResult
+
+        retrieval = RetrievalResult(
+            company="LG에너지솔루션",
+            queries=["LG query"],
+            items=[
+                RetrievalItem(
+                    document_id="low-trust",
+                    chunk_id="low-trust-chunk",
+                    title="Low trust source",
+                    text="web strategy evidence from low trust source",
+                    score=0.95,
+                    source_type="web",
+                    source="blog.naver.com",
+                    topics=["strategy"],
+                    url="https://blog.naver.com/low-trust",
+                ),
+                RetrievalItem(
+                    document_id="high-trust",
+                    chunk_id="high-trust-chunk",
+                    title="High trust source",
+                    text="web strategy evidence from preferred source",
+                    score=0.90,
+                    source_type="web",
+                    source="fitchratings.com",
+                    topics=["strategy"],
+                    url="https://fitchratings.com/research",
+                ),
+            ],
+            next_action="curation",
+            used_web_search=False,
+            partial=False,
+        )
+
+        bundle = run_lg_curation(retrieval)
+        self.assertEqual(bundle.entries[0].source, "fitchratings.com")
+        self.assertEqual(len(bundle.entries), 2)
+
 
 class AnalysisAndComparisonAgentTest(unittest.TestCase):
     def test_analysis_and_comparison_generate_reference_handoff(self) -> None:

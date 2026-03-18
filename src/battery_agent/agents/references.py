@@ -6,6 +6,7 @@ import re
 from pathlib import Path
 from urllib.parse import urlparse
 
+from battery_agent.agents.evidence_quality import evidence_quality, is_quality_reference
 from battery_agent.models.analysis import CompanyAnalysisResult
 from battery_agent.models.evidence import EvidenceBundle, EvidenceItem
 from battery_agent.models.report import ComparisonResult, ReferenceEntry, ReferenceResult
@@ -67,17 +68,35 @@ def build_references(
         for entry in bundle.entries:
             evidence_map.setdefault(entry.document_id, entry)
 
-    entries = [
-        ReferenceEntry(
-            document_id=document_id,
-            source_type=SOURCE_TYPE_ALIASES.get(
-                evidence_map[document_id].source_type, evidence_map[document_id].source_type
-            ),
-            formatted_reference=_format_reference(evidence_map[document_id]),
+    candidate_reference_items: list[tuple[EvidenceItem, ReferenceEntry]] = []
+    for document_id in used_doc_ids:
+        entry = evidence_map.get(document_id)
+        if entry is None:
+            continue
+        candidate_reference_items.append(
+            (
+                entry,
+                ReferenceEntry(
+                    document_id=document_id,
+                    source_type=SOURCE_TYPE_ALIASES.get(entry.source_type, entry.source_type),
+                    formatted_reference=_format_reference(entry),
+                ),
+            )
         )
-        for document_id in used_doc_ids
-        if document_id in evidence_map
+
+    prioritized_items = [
+        item
+        for entry, item in candidate_reference_items
+        if is_quality_reference(entry)
     ]
+    if not prioritized_items:
+        prioritized_items = [item for _, item in candidate_reference_items]
+
+    entries = sorted(
+        prioritized_items,
+        key=lambda item: evidence_quality(evidence_map[item.document_id]),
+        reverse=True,
+    )
     result = ReferenceResult(entries=entries)
     if artifact_path is not None:
         write_json(artifact_path, result.to_dict())

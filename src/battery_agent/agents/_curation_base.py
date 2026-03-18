@@ -7,10 +7,10 @@ from pathlib import Path
 from battery_agent.models.evidence import EvidenceBundle, EvidenceItem
 from battery_agent.models.retrieval import RetrievalResult
 from battery_agent.storage.json_store import write_json
+from battery_agent.agents.evidence_quality import evidence_sort_key
 
 
 REQUIRED_TOPICS = ("strategy", "risk")
-SOURCE_PRIORITY = {"report": 3, "memo": 2, "web": 1}
 
 
 def run_curation_agent(
@@ -25,6 +25,8 @@ def run_curation_agent(
             snippet=item.text,
             source_type=item.source_type,
             source=item.source,
+            title=getattr(item, "title", ""),
+            url=str(getattr(item, "url", "")),
             topics=list(item.topics),
             score=item.score,
         )
@@ -53,5 +55,6 @@ def run_curation_agent(
     return result
 
 
-def _priority(entry: EvidenceItem) -> tuple[int, float]:
-    return (SOURCE_PRIORITY.get(entry.source_type, 0), entry.score)
+def _priority(entry: EvidenceItem) -> tuple[float, float]:
+    quality_score, retrieval_score = evidence_sort_key(entry)
+    return quality_score, retrieval_score

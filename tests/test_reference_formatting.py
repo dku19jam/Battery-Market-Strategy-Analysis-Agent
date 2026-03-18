@@ -113,6 +113,97 @@ class ReferenceFormattingTest(unittest.TestCase):
         self.assertIn("IEA", result.entries[1].formatted_reference)
         self.assertIn("https://www.iea.org/reports/battery", result.entries[1].formatted_reference)
 
+    def test_build_references_prioritizes_and_filters_low_quality_entries(self) -> None:
+        from battery_agent.agents.references import build_references
+        from battery_agent.models.analysis import CompanyAnalysisResult
+        from battery_agent.models.evidence import EvidenceBundle, EvidenceItem
+        from battery_agent.models.report import ComparisonResult, NormalizedCompanyAnalysis
+
+        lg_bundle = EvidenceBundle(
+            company="LG에너지솔루션",
+            topics=["strategy"],
+            entries=[
+                EvidenceItem(
+                    document_id="high-trust",
+                    snippet="preferred source with detailed strategic content",
+                    source_type="web",
+                    source="fitchratings.com",
+                    title="Preferred strategic document",
+                    url="https://fitchratings.com/research",
+                    topics=["strategy"],
+                    score=0.7,
+                ),
+                EvidenceItem(
+                    document_id="low-trust",
+                    snippet="short note",
+                    source_type="web",
+                    source="blog.naver.com",
+                    title="Noisy source document",
+                    url="https://blog.naver.com/noisy",
+                    topics=["strategy"],
+                    score=0.7,
+                ),
+            ],
+            topic_buckets={},
+            missing_topics=[],
+            next_action="analysis",
+        )
+        lg_analysis = CompanyAnalysisResult(
+            company="LG에너지솔루션",
+            strategy_summary="summary",
+            strengths=["strength"],
+            risks=["risk"],
+            citations=["high-trust", "low-trust"],
+            analysis_notes="done",
+            next_action="comparison",
+            partial=False,
+        )
+        catl_analysis = CompanyAnalysisResult(
+            company="CATL",
+            strategy_summary="summary",
+            strengths=["strength"],
+            risks=["risk"],
+            citations=["low-trust"],
+            analysis_notes="done",
+            next_action="comparison",
+            partial=False,
+        )
+        comparison = ComparisonResult(
+            normalized_companies=[
+                NormalizedCompanyAnalysis(
+                    company="LG에너지솔루션",
+                    strategy_summary="summary",
+                    strengths=["strength"],
+                    risks=["risk"],
+                    citations=["high-trust", "low-trust"],
+                    partial=False,
+                ),
+                NormalizedCompanyAnalysis(
+                    company="CATL",
+                    strategy_summary="summary",
+                    strengths=["strength"],
+                    risks=["risk"],
+                    citations=["low-trust"],
+                    partial=False,
+                ),
+            ],
+            strategy_differences=["difference"],
+            strengths_weaknesses=["comparison"],
+            swot=["swot"],
+            insights=["insight"],
+            refinement_requests=[],
+            next_action="reference",
+        )
+
+        result = build_references(
+            evidence_bundles=[lg_bundle],
+            analyses=[lg_analysis, catl_analysis],
+            comparison=comparison,
+        )
+
+        self.assertEqual(len(result.entries), 1)
+        self.assertIn("fitchratings.com", result.entries[0].formatted_reference)
+
     def test_reference_block_groups_by_source_type(self) -> None:
         from battery_agent.agents.references import ReferenceEntry, format_reference_block
 
