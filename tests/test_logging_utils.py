@@ -1,0 +1,16 @@
+import tempfile
+import unittest
+from pathlib import Path
+
+
+class LoggingUtilsTest(unittest.TestCase):
+    def test_build_run_logger_writes_log_file(self) -> None:
+        from battery_agent.logging_utils import build_run_logger
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            log_path = Path(tmp_dir) / "run.log"
+            logger = build_run_logger("battery-agent-test", log_path)
+            logger.info("hello logger")
+
+            self.assertTrue(log_path.exists())
+            self.assertIn("hello logger", log_path.read_text(encoding="utf-8"))
