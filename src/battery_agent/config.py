@@ -11,8 +11,26 @@ class ConfigError(ValueError):
     """Raised when required configuration is missing."""
 
 
-def _env_flag(name: str, default: bool = False) -> bool:
-    value = os.getenv(name)
+def _load_dotenv(env_path: Path) -> dict[str, str]:
+    if not env_path.exists():
+        return {}
+
+    values: dict[str, str] = {}
+    for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        values[key.strip()] = value.strip().strip("'").strip('"')
+    return values
+
+
+def _env_value(name: str, dotenv_values: dict[str, str]) -> str | None:
+    return os.getenv(name, dotenv_values.get(name))
+
+
+def _env_flag(name: str, dotenv_values: dict[str, str], default: bool = False) -> bool:
+    value = _env_value(name, dotenv_values)
     if value is None:
         return default
     return value.strip().lower() in {"1", "true", "yes", "on"}
@@ -28,8 +46,11 @@ class Settings:
     web_search_enabled: bool
 
     @classmethod
-    def from_env(cls) -> "Settings":
-        api_key = os.getenv("OPENAI_API_KEY")
+    def from_env(cls, env_path: Path | None = None) -> "Settings":
+        dotenv_path = env_path or Path(".env")
+        dotenv_values = _load_dotenv(dotenv_path)
+
+        api_key = _env_value("OPENAI_API_KEY", dotenv_values)
         if not api_key:
             raise ConfigError("OPENAI_API_KEY is required to run battery-agent.")
 
@@ -38,6 +59,12 @@ class Settings:
             default_companies=("LG에너지솔루션", "CATL"),
             default_model="gpt-4o-mini",
             default_topic="배터리 시장 전략 비교",
-            output_root=Path(os.getenv("BATTERY_AGENT_OUTPUT_DIR", "artifacts")),
-            web_search_enabled=_env_flag("BATTERY_AGENT_WEB_SEARCH", default=False),
+            output_root=Path(
+                _env_value("BATTERY_AGENT_OUTPUT_DIR", dotenv_values) or "artifacts"
+            ),
+            web_search_enabled=_env_flag(
+                "BATTERY_AGENT_WEB_SEARCH",
+                dotenv_values,
+                default=False,
+            ),
         )
