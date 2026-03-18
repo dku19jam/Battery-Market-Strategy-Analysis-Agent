@@ -26,12 +26,18 @@ class LimitedWebSearcher:
         provider: Callable[[str], list[WebSearchResult]],
         max_results: int,
         max_per_source: int = 2,
+        max_calls: int = 3,
     ) -> None:
         self.provider = provider
         self.max_results = max_results
         self.max_per_source = max_per_source
+        self.max_calls = max_calls
+        self.calls_made = 0
 
     def search(self, query: str, artifact_path: Path | None = None) -> list[WebSearchResult]:
+        if self.calls_made >= self.max_calls:
+            return []
+        self.calls_made += 1
         source_counts: dict[str, int] = {}
         filtered: list[WebSearchResult] = []
         for result in self.provider(query):
@@ -89,6 +95,7 @@ def build_tavily_web_searcher(
     api_key: str,
     max_results: int,
     max_per_source: int = 2,
+    max_calls: int = 3,
 ) -> LimitedWebSearcher:
     try:
         from tavily import TavilyClient
@@ -105,6 +112,7 @@ def build_tavily_web_searcher(
         provider=provider,
         max_results=max_results,
         max_per_source=max_per_source,
+        max_calls=max_calls,
     )
 
 

@@ -55,6 +55,7 @@ class Settings:
     output_root: Path
     tavily_api_key: str | None
     web_search_enabled: bool
+    web_search_max_calls: int
     web_search_max_results: int
 
     @classmethod
@@ -86,6 +87,9 @@ class Settings:
                 "BATTERY_AGENT_WEB_SEARCH",
                 dotenv_values,
                 default=False,
+            ),
+            web_search_max_calls=int(
+                _env_value("BATTERY_AGENT_WEB_SEARCH_MAX_CALLS", dotenv_values) or "3"
             ),
             web_search_max_results=int(
                 _env_value("BATTERY_AGENT_WEB_SEARCH_MAX_RESULTS", dotenv_values) or "5"

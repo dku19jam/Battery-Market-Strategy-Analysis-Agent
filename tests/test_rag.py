@@ -135,3 +135,30 @@ class EmbedderAndVectorIndexTest(unittest.TestCase):
 
         self.assertEqual(first, second)
         self.assertEqual(hits[0].record_id, "chunk-1")
+
+    def test_index_refresh_policy_uses_corpus_fingerprint(self) -> None:
+        from battery_agent.rag.vector_index import (
+            compute_corpus_fingerprint,
+            should_rebuild_index,
+            write_index_metadata,
+        )
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            corpus_dir = Path(tmp_dir) / "corpus"
+            corpus_dir.mkdir()
+            (corpus_dir / "docs.jsonl").write_text('{"id":"1"}\n', encoding="utf-8")
+            index_path = Path(tmp_dir) / "index.json"
+            metadata_path = Path(tmp_dir) / "index.meta.json"
+            fingerprint = compute_corpus_fingerprint(corpus_dir)
+
+            self.assertTrue(should_rebuild_index(index_path, metadata_path, fingerprint))
+
+            index_path.write_text("[]", encoding="utf-8")
+            write_index_metadata(metadata_path, fingerprint)
+
+            self.assertFalse(should_rebuild_index(index_path, metadata_path, fingerprint))
+
+            (corpus_dir / "docs.jsonl").write_text('{"id":"2"}\n', encoding="utf-8")
+            updated_fingerprint = compute_corpus_fingerprint(corpus_dir)
+
+            self.assertTrue(should_rebuild_index(index_path, metadata_path, updated_fingerprint))

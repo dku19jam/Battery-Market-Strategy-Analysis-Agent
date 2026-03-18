@@ -18,6 +18,7 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual(settings.embedding_model_id, "Qwen/Qwen3-Embedding-0.6B")
         self.assertEqual(settings.local_corpus_dir, Path("corpus"))
         self.assertIsNone(settings.tavily_api_key)
+        self.assertEqual(settings.web_search_max_calls, 3)
         self.assertEqual(settings.web_search_max_results, 5)
         self.assertFalse(settings.web_search_enabled)
 
@@ -42,6 +43,7 @@ class ConfigTest(unittest.TestCase):
                         "BATTERY_AGENT_OUTPUT_DIR=custom-artifacts",
                         "TAVILY_API_KEY=tavily-dotenv-key",
                         "BATTERY_AGENT_WEB_SEARCH=true",
+                        "BATTERY_AGENT_WEB_SEARCH_MAX_CALLS=7",
                     ]
                 ),
                 encoding="utf-8",
@@ -53,6 +55,7 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual(settings.openai_api_key, "dotenv-key")
         self.assertEqual(settings.output_root, Path("custom-artifacts"))
         self.assertEqual(settings.tavily_api_key, "tavily-dotenv-key")
+        self.assertEqual(settings.web_search_max_calls, 7)
         self.assertTrue(settings.web_search_enabled)
 
     def test_os_environment_overrides_dotenv_file(self) -> None:
@@ -68,6 +71,7 @@ class ConfigTest(unittest.TestCase):
                         "BATTERY_AGENT_CORPUS_DIR=data/corpus",
                         "TAVILY_API_KEY=dotenv-tavily-key",
                         "BATTERY_AGENT_WEB_SEARCH_MAX_RESULTS=9",
+                        "BATTERY_AGENT_WEB_SEARCH_MAX_CALLS=11",
                     ]
                 ),
                 encoding="utf-8",
@@ -84,4 +88,5 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual(settings.embedding_model_id, "custom-model")
         self.assertEqual(settings.local_corpus_dir, Path("data/corpus"))
         self.assertEqual(settings.tavily_api_key, "env-tavily-key")
+        self.assertEqual(settings.web_search_max_calls, 11)
         self.assertEqual(settings.web_search_max_results, 9)

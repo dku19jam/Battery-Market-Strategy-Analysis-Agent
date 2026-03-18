@@ -1,4 +1,5 @@
 import json
+import logging
 import tempfile
 import unittest
 from pathlib import Path
@@ -69,7 +70,14 @@ class LocalRetrieverTest(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             artifact_path = Path(tmp_dir) / "retrieval.json"
-            retriever = LocalRetriever(index=index, embed_query=fake_embed)
+            log_path = Path(tmp_dir) / "retrieval.log"
+            logger = logging.getLogger("battery-agent-test-local-retriever")
+            logger.handlers.clear()
+            logger.setLevel(logging.INFO)
+            logger.propagate = False
+            handler = logging.FileHandler(log_path, encoding="utf-8")
+            logger.addHandler(handler)
+            retriever = LocalRetriever(index=index, embed_query=fake_embed, logger=logger)
             hits = retriever.search(
                 company="LG에너지솔루션",
                 queries=["battery strategy"],
@@ -78,17 +86,23 @@ class LocalRetrieverTest(unittest.TestCase):
             )
 
             payload = json.loads(artifact_path.read_text(encoding="utf-8"))
+            handler.close()
+            log_text = log_path.read_text(encoding="utf-8")
 
         self.assertEqual(len(hits), 1)
         self.assertEqual(hits[0].document_id, "doc-1")
         self.assertEqual(payload[0]["document_id"], "doc-1")
+        self.assertIn("local retrieval company=LG에너지솔루션", log_text)
 
 
 class WebSearchTest(unittest.TestCase):
     def test_web_search_limits_results_and_caps_single_source(self) -> None:
         from battery_agent.search.web_search import LimitedWebSearcher, WebSearchResult
 
+        calls: list[str] = []
+
         def provider(query: str) -> list[WebSearchResult]:
+            calls.append(query)
             return [
                 WebSearchResult(title="a", url="https://same.com/1", source="same.com", snippet="x"),
                 WebSearchResult(title="b", url="https://same.com/2", source="same.com", snippet="y"),
@@ -98,13 +112,16 @@ class WebSearchTest(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             artifact_path = Path(tmp_dir) / "web.json"
-            searcher = LimitedWebSearcher(provider=provider, max_results=3, max_per_source=2)
+            searcher = LimitedWebSearcher(provider=provider, max_results=3, max_per_source=2, max_calls=1)
             results = searcher.search("battery strategy", artifact_path=artifact_path)
+            second_results = searcher.search("battery strategy again")
             payload = json.loads(artifact_path.read_text(encoding="utf-8"))
 
         self.assertEqual(len(results), 3)
+        self.assertEqual(second_results, [])
         self.assertEqual(sum(1 for result in results if result.source == "same.com"), 2)
         self.assertEqual(len(payload), 3)
+        self.assertEqual(calls, ["battery strategy"])
 
     def test_tavily_provider_maps_api_results(self) -> None:
         from battery_agent.search.web_search import TavilySearchProvider

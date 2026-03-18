@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -68,3 +69,28 @@ def _cosine_similarity(left: list[float], right: list[float]) -> float:
     left_norm = sum(value * value for value in left) ** 0.5 or 1.0
     right_norm = sum(value * value for value in right) ** 0.5 or 1.0
     return numerator / (left_norm * right_norm)
+
+
+def compute_corpus_fingerprint(corpus_dir: Path) -> str:
+    hasher = hashlib.sha256()
+    for path in sorted(corpus_dir.rglob("*")):
+        if not path.is_file():
+            continue
+        hasher.update(str(path.relative_to(corpus_dir)).encode("utf-8"))
+        hasher.update(path.read_bytes())
+    return hasher.hexdigest()
+
+
+def write_index_metadata(metadata_path: Path, corpus_fingerprint: str) -> None:
+    metadata_path.parent.mkdir(parents=True, exist_ok=True)
+    metadata_path.write_text(
+        json.dumps({"corpus_fingerprint": corpus_fingerprint}, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
+def should_rebuild_index(index_path: Path, metadata_path: Path, current_fingerprint: str) -> bool:
+    if not index_path.exists() or not metadata_path.exists():
+        return True
+    payload = json.loads(metadata_path.read_text(encoding="utf-8"))
+    return payload.get("corpus_fingerprint") != current_fingerprint

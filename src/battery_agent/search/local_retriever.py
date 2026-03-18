@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Callable
@@ -28,9 +29,11 @@ class LocalRetriever:
         self,
         index: InMemoryVectorIndex,
         embed_query: Callable[[str], list[float]],
+        logger: logging.Logger | None = None,
     ) -> None:
         self.index = index
         self.embed_query = embed_query
+        self.logger = logger
 
     def search(
         self,
@@ -40,6 +43,13 @@ class LocalRetriever:
         artifact_path: Path | None = None,
     ) -> list[RetrievalHit]:
         aggregated: dict[str, RetrievalHit] = {}
+        if self.logger is not None:
+            self.logger.info(
+                "local retrieval company=%s queries=%s top_k=%s",
+                company,
+                len(queries),
+                top_k,
+            )
         for query in queries:
             query_embedding = self.embed_query(query)
             matches = self.index.search(query_embedding, top_k=top_k * 2)
@@ -61,6 +71,12 @@ class LocalRetriever:
                     aggregated[hit.chunk_id] = hit
 
         results = sorted(aggregated.values(), key=lambda item: item.score, reverse=True)[:top_k]
+        if self.logger is not None:
+            self.logger.info(
+                "local retrieval company=%s selected_hits=%s",
+                company,
+                len(results),
+            )
         if artifact_path is not None:
             artifact_path.parent.mkdir(parents=True, exist_ok=True)
             artifact_path.write_text(

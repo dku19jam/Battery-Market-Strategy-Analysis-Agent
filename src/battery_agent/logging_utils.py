@@ -33,3 +33,7 @@ def build_run_logger(name: str, log_path: Path) -> logging.Logger:
     file_handler.setFormatter(logging.Formatter(LOG_FORMAT))
     logger.addHandler(file_handler)
     return logger
+
+
+def log_retry_attempt(logger: logging.Logger, stage: str, attempt: int, reason: str) -> None:
+    logger.warning("retry stage=%s attempt=%s reason=%s", stage, attempt, reason)
