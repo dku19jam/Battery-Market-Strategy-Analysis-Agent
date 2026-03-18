@@ -12,7 +12,7 @@ from battery_agent.agents._prompt_builders import (
 )
 from battery_agent.config import Settings
 from battery_agent.llm.openai_structured import StructuredOpenAIClient
-from battery_agent.models.analysis import CompanyAnalysisResult
+from battery_agent.models.analysis import AnalysisMetric, CompanyAnalysisResult
 from battery_agent.models.evidence import EvidenceBundle
 from battery_agent.storage.json_store import write_json
 
@@ -52,6 +52,15 @@ def run_analysis_agent(
         for citation in payload.get("citations", [])
         if citation in valid_citations
     ]
+    metrics = []
+    for item in payload.get("metrics", []):
+        if not isinstance(item, dict):
+            continue
+        metric = str(item.get("metric", "")).strip()
+        value = str(item.get("value", "")).strip()
+        source_hint = str(item.get("source_hint", "")).strip()
+        if metric and value:
+            metrics.append(AnalysisMetric(metric=metric, value=value, source_hint=source_hint))
     strategy_entries = bundle.topic_buckets.get("strategy", [])
     risk_entries = bundle.topic_buckets.get("risk", [])
     strategy_summary = str(payload.get("strategy_summary", "")).strip() or (
@@ -78,6 +87,7 @@ def run_analysis_agent(
         strengths=strengths,
         risks=risks,
         citations=citations,
+        metrics=metrics,
         analysis_notes=notes,
         next_action="comparison",
         partial=partial,

@@ -3,9 +3,15 @@ import unittest
 
 class ModelsTest(unittest.TestCase):
     def test_model_round_trip_serialization(self) -> None:
-        from battery_agent.models.analysis import CompanyAnalysisResult
+        from battery_agent.models.analysis import AnalysisMetric, CompanyAnalysisResult
         from battery_agent.models.evidence import EvidenceBundle, EvidenceItem
-        from battery_agent.models.report import ComparisonResult, NormalizedCompanyAnalysis, ReportArtifact
+        from battery_agent.models.report import (
+            CompanyMetric,
+            ComparisonResult,
+            NormalizedCompanyAnalysis,
+            ReportArtifact,
+            SWOTSection,
+        )
         from battery_agent.models.retrieval import RetrievalItem, RetrievalResult
         from battery_agent.models.run_context import RunContext
 
@@ -54,6 +60,13 @@ class ModelsTest(unittest.TestCase):
             strengths=["생산 역량"],
             risks=["원가 부담"],
             citations=["doc-1"],
+            metrics=[
+                AnalysisMetric(
+                    metric="매출",
+                    value="25.6조원",
+                    source_hint="2024 사업보고서",
+                )
+            ],
             analysis_notes="analysis note",
             next_action="comparison",
             partial=False,
@@ -71,8 +84,21 @@ class ModelsTest(unittest.TestCase):
             ],
             strategy_differences=["LG는 북미 집중, CATL은 공급망 다변화"],
             strengths_weaknesses=["LG는 생산 역량 강점, CATL은 가격 경쟁력 강점"],
-            swot=["Strength: scale", "Risk: pricing"],
+            swot=SWOTSection(
+                strengths=["LG는 생산 역량, CATL은 가격 경쟁력"],
+                weaknesses=["LG는 원가 부담"],
+                opportunities=["ESS 확대"],
+                threats=["가격 경쟁 심화"],
+            ),
             insights=["시장 변동성 대응이 핵심"],
+            company_metrics=[
+                CompanyMetric(
+                    company="LG에너지솔루션",
+                    metric="매출",
+                    value="25.6조원",
+                    source_hint="2024 사업보고서",
+                )
+            ],
             refinement_requests=[],
             next_action="reference",
         )

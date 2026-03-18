@@ -89,7 +89,8 @@ def _build_sections(
         "LG_STRATEGY": lg_analysis.strategy_summary,
         "CATL_STRATEGY": catl_analysis.strategy_summary,
         "STRATEGY_COMPARISON": "\n".join(comparison.strategy_differences),
-        "SWOT": "\n".join(comparison.swot),
+        "COMPANY_METRICS": _build_metrics_table(comparison),
+        "SWOT": _build_swot_markdown(comparison),
         "INSIGHTS": "\n".join(comparison.insights),
         "REFERENCE": "\n".join(f"- {entry.formatted_reference}" for entry in references.entries),
     }
@@ -123,7 +124,40 @@ def _build_sections(
         or default_sections["CATL_STRATEGY"],
         "STRATEGY_COMPARISON": str(payload.get("strategy_comparison", "")).strip()
         or default_sections["STRATEGY_COMPARISON"],
-        "SWOT": str(payload.get("swot", "")).strip() or default_sections["SWOT"],
+        "COMPANY_METRICS": default_sections["COMPANY_METRICS"],
+        "SWOT": default_sections["SWOT"],
         "INSIGHTS": str(payload.get("insights", "")).strip() or default_sections["INSIGHTS"],
         "REFERENCE": default_sections["REFERENCE"],
     }
+
+
+def _build_swot_markdown(comparison: ComparisonResult) -> str:
+    parts: list[str] = []
+    for title, items in (
+        ("Strengths", comparison.swot.strengths),
+        ("Weaknesses", comparison.swot.weaknesses),
+        ("Opportunities", comparison.swot.opportunities),
+        ("Threats", comparison.swot.threats),
+    ):
+        parts.append(f"### {title}")
+        if items:
+            parts.extend(f"- {item}" for item in items)
+        else:
+            parts.append("- 자료 부족")
+        parts.append("")
+    return "\n".join(parts).strip()
+
+
+def _build_metrics_table(comparison: ComparisonResult) -> str:
+    if not comparison.company_metrics:
+        return "정량 지표 근거가 충분하지 않아 표를 생략한다."
+
+    lines = [
+        "| 회사 | 지표 | 값 | 출처 |",
+        "| --- | --- | --- | --- |",
+    ]
+    for item in comparison.company_metrics:
+        lines.append(
+            f"| {item.company} | {item.metric} | {item.value} | {item.source_hint or '-'} |"
+        )
+    return "\n".join(lines)

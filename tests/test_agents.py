@@ -271,6 +271,10 @@ class AnalysisAndComparisonAgentTest(unittest.TestCase):
                         "strengths": ["북미 고객 기반 확대", "생산 역량"],
                         "risks": ["원가 부담", "수요 둔화"],
                         "citations": ["lg-1", "bad-doc-id"],
+                        "metrics": [
+                            {"metric": "매출", "value": "25.6조원", "source_hint": "2024 사업보고서"},
+                            {"metric": "영업이익", "value": "5,754억원", "source_hint": "2024 사업보고서"},
+                        ],
                         "analysis_notes": "evidence grouped by topic",
                     }
                 return {
@@ -290,8 +294,17 @@ class AnalysisAndComparisonAgentTest(unittest.TestCase):
                     ],
                     "strategy_differences": ["성장 지역과 공급망 접근이 다르다"],
                     "strengths_weaknesses": ["LG는 고객 기반, CATL은 원가 경쟁력이 강점"],
-                    "swot": ["Strength: 고객 기반", "Risk: 지정학 리스크"],
+                    "swot": {
+                        "strengths": ["LG는 고객 기반, CATL은 원가 경쟁력과 파트너십이 강점이다."],
+                        "weaknesses": ["LG는 원가 부담, CATL은 지정학 리스크 노출이 약점이다."],
+                        "opportunities": ["ESS 확대와 북미 공급망 재편은 추가 성장 기회다."],
+                        "threats": ["시장 둔화와 기술 전환 속도는 공통 위협이다."],
+                    },
                     "insights": ["시장 둔화 국면에서 공급망 안정성이 중요하다"],
+                    "company_metrics": [
+                        {"company": "LG에너지솔루션", "metric": "매출", "value": "25.6조원", "source_hint": "2024 사업보고서"},
+                        {"company": "CATL", "metric": "시장점유율", "value": "27.0%", "source_hint": "2024 Annual Report"},
+                    ],
                     "refinement_requests": [],
                 }
 
@@ -372,6 +385,9 @@ class AnalysisAndComparisonAgentTest(unittest.TestCase):
         self.assertEqual(catl_analysis.next_action, "comparison")
         self.assertEqual(comparison.next_action, "reference")
         self.assertEqual(comparison.strategy_differences, ["성장 지역과 공급망 접근이 다르다"])
+        self.assertEqual(lg_analysis.metrics[0].metric, "매출")
+        self.assertEqual(comparison.swot.strengths[0], "LG는 고객 기반, CATL은 원가 경쟁력과 파트너십이 강점이다.")
+        self.assertEqual(comparison.company_metrics[0].metric, "매출")
         self.assertEqual(comparison.refinement_requests, [])
         self.assertEqual(lg_analysis.citations, ["lg-1"])
         self.assertIn("strategy", fake_llm.calls[0]["user_prompt"])
@@ -417,8 +433,14 @@ class AnalysisAndComparisonAgentTest(unittest.TestCase):
                     "normalized_companies": [],
                     "strategy_differences": ["difference"],
                     "strengths_weaknesses": ["comparison"],
-                    "swot": ["swot"],
+                    "swot": {
+                        "strengths": ["strength"],
+                        "weaknesses": ["weakness"],
+                        "opportunities": ["opportunity"],
+                        "threats": ["threat"],
+                    },
                     "insights": ["insight"],
+                    "company_metrics": [],
                     "refinement_requests": [],
                 }
 

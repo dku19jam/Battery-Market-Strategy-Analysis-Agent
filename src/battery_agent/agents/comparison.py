@@ -13,7 +13,12 @@ from battery_agent.agents._prompt_builders import (
 from battery_agent.config import Settings
 from battery_agent.llm.openai_structured import StructuredOpenAIClient
 from battery_agent.models.analysis import CompanyAnalysisResult
-from battery_agent.models.report import ComparisonResult, NormalizedCompanyAnalysis
+from battery_agent.models.report import (
+    CompanyMetric,
+    ComparisonResult,
+    NormalizedCompanyAnalysis,
+    SWOTSection,
+)
 from battery_agent.storage.json_store import write_json
 
 
@@ -47,6 +52,7 @@ def run_comparison(
             strengths=list(lg_analysis.strengths),
             risks=list(lg_analysis.risks),
             citations=list(lg_analysis.citations),
+            metrics=[metric.to_dict() for metric in lg_analysis.metrics],
             partial=lg_analysis.partial,
         ),
         NormalizedCompanyAnalysis(
@@ -55,6 +61,7 @@ def run_comparison(
             strengths=list(catl_analysis.strengths),
             risks=list(catl_analysis.risks),
             citations=list(catl_analysis.citations),
+            metrics=[metric.to_dict() for metric in catl_analysis.metrics],
             partial=catl_analysis.partial,
         ),
     ]
@@ -87,18 +94,95 @@ def run_comparison(
             f"LG 리스크: {', '.join(lg_analysis.risks)}",
             f"CATL 리스크: {', '.join(catl_analysis.risks)}",
         ],
-        swot=[str(item).strip() for item in payload.get("swot", []) if str(item).strip()]
-        or [
-            f"Strength: {lg_analysis.strengths[0]}",
-            f"Strength: {catl_analysis.strengths[0]}",
-            f"Risk: {lg_analysis.risks[0]}",
-            f"Risk: {catl_analysis.risks[0]}",
-        ],
+        swot=_build_swot(payload, lg_analysis, catl_analysis),
         insights=[str(item).strip() for item in payload.get("insights", []) if str(item).strip()]
         or ["두 기업 모두 다각화 전략과 리스크 관리 역량 비교가 핵심이다."],
+        company_metrics=_build_company_metrics(payload, lg_analysis, catl_analysis),
         refinement_requests=refinement_requests,
         next_action="reference" if not refinement_requests else "analysis_refinement",
     )
     if artifact_path is not None:
         write_json(artifact_path, result.to_dict())
     return result
+
+
+def _build_swot(
+    payload: dict[str, object],
+    lg_analysis: CompanyAnalysisResult,
+    catl_analysis: CompanyAnalysisResult,
+) -> SWOTSection:
+    swot_payload = payload.get("swot", {})
+    if isinstance(swot_payload, dict):
+        strengths = [str(item).strip() for item in swot_payload.get("strengths", []) if str(item).strip()]
+        weaknesses = [str(item).strip() for item in swot_payload.get("weaknesses", []) if str(item).strip()]
+        opportunities = [
+            str(item).strip() for item in swot_payload.get("opportunities", []) if str(item).strip()
+        ]
+        threats = [str(item).strip() for item in swot_payload.get("threats", []) if str(item).strip()]
+    else:
+        strengths = []
+        weaknesses = []
+        opportunities = []
+        threats = []
+
+    if not strengths:
+        strengths = [
+            f"{lg_analysis.company}: {', '.join(lg_analysis.strengths[:2]) or '강점 근거 부족'}",
+            f"{catl_analysis.company}: {', '.join(catl_analysis.strengths[:2]) or '강점 근거 부족'}",
+        ]
+    if not weaknesses:
+        weaknesses = [
+            f"{lg_analysis.company}: {', '.join(lg_analysis.risks[:2]) or '약점 근거 부족'}",
+            f"{catl_analysis.company}: {', '.join(catl_analysis.risks[:2]) or '약점 근거 부족'}",
+        ]
+    if not opportunities:
+        opportunities = ["ESS 확대와 지역별 공급망 재편은 양사 공통의 성장 기회다."]
+    if not threats:
+        threats = ["시장 수요 둔화와 가격 경쟁 심화는 양사 공통의 위협이다."]
+
+    return SWOTSection(
+        strengths=strengths,
+        weaknesses=weaknesses,
+        opportunities=opportunities,
+        threats=threats,
+    )
+
+
+def _build_company_metrics(
+    payload: dict[str, object],
+    lg_analysis: CompanyAnalysisResult,
+    catl_analysis: CompanyAnalysisResult,
+) -> list[CompanyMetric]:
+    metrics: list[CompanyMetric] = []
+    for item in payload.get("company_metrics", []):
+        if not isinstance(item, dict):
+            continue
+        company = str(item.get("company", "")).strip()
+        metric = str(item.get("metric", "")).strip()
+        value = str(item.get("value", "")).strip()
+        source_hint = str(item.get("source_hint", "")).strip()
+        if company and metric and value:
+            metrics.append(
+                CompanyMetric(
+                    company=company,
+                    metric=metric,
+                    value=value,
+                    source_hint=source_hint,
+                )
+            )
+
+    if metrics:
+        return metrics
+
+    derived_metrics: list[CompanyMetric] = []
+    for analysis in (lg_analysis, catl_analysis):
+        for metric in analysis.metrics:
+            derived_metrics.append(
+                CompanyMetric(
+                    company=analysis.company,
+                    metric=metric.metric,
+                    value=metric.value,
+                    source_hint=metric.source_hint,
+                )
+            )
+    return derived_metrics
