@@ -70,16 +70,20 @@ Limited web search uses Tavily. To enable it:
 
 When enabled, Tavily results are normalized into the internal `WebSearchResult` format and then filtered by `max_per_source` to reduce source concentration.
 
+## Analysis and Comparison
+
+Company analysis and cross-company comparison use the official OpenAI Python SDK with structured JSON output. The analysis agents build dynamic prompts from curated topic buckets and validate citations against the provided evidence set before producing artifacts.
+
 ## Development
 
 Run tests with:
 
 ```bash
-PYTHONPATH=src python3 -m unittest discover -s tests -v
+PYTHONPATH=src .venv/bin/python -m unittest discover -s tests -v
 ```
 
 Run the CLI with:
 
 ```bash
-PYTHONPATH=src python3 -m battery_agent.cli
+PYTHONPATH=src .venv/bin/python -m battery_agent.cli
 ```
