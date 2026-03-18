@@ -78,7 +78,8 @@ def _localize_sections_to_korean(
         system_prompt=(
             "You are a professional Korean report editor. "
             "모든 항목을 한국어로만 작성해 다시 작성한다. "
-            "수치, 문헌 ID, URL, 보고서명 및 표의 수치값은 그대로 유지한다."
+            "수치, 문헌 ID, URL, 보고서명 및 표의 수치값은 그대로 유지한다. "
+            "표로 정리 가능한 항목은 반드시 Markdown 표로 상세 작성한다."
         ),
         user_prompt=(
             "다음 최종 보고서 초안을 한국어 버전으로 번역/보정해 JSON으로 반환하세요. "
@@ -86,6 +87,8 @@ def _localize_sections_to_korean(
             "company_metrics, insights 그대로 유지해야 합니다. "
             "MARKET_BACKGROUND, LG_STRATEGY, CATL_STRATEGY, STRATEGY_COMPARISON은 문단형식으로 유지하고, "
             "SWOT는 기존 섹션 텍스트 내의 Strengths/Weaknesses/Opportunities/Threats를 한국어로 정리하세요. "
+            "구조화 가능한 정보(비교, 지표, 리스크, 시사점)는 Markdown 표를 포함해 상세히 정리하세요. "
+            "이미 존재하는 Markdown 표는 삭제하지 말고 유지/개선하세요. "
             "반드시 JSON 만 반환하세요.\n\n"
             f"Draft:{sections}"
         ),

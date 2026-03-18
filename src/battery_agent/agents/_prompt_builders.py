@@ -178,6 +178,10 @@ def report_system_prompt() -> str:
         "SWOT 항목별로 각 최소 3개 항목, 각 항목 끝에 사용한 문서 ID(예: [doc-id])를 가능하면 추가할 것.\n"
         "회사별 수치화된 데이터가 있으면 Markdown 표 형식으로 COMPANY_METRICS 섹션에 정리하고, "
         "문항별로 출처 단서(기업 리포트명 또는 URL의 핵심 식별자)를 함께 남길 것. "
+        "표로 정리 가능한 항목은 문단만 쓰지 말고 반드시 Markdown 표로 상세 정리할 것. "
+        "특히 전략축 비교, 리스크 비교, 실행 근거, 정량 지표, SWOT 요약은 가능하면 표를 우선 사용한다. "
+        "표는 최소 4개 열(항목, 내용, 근거, 시사점)을 기본으로 하고, 회사 비교 항목은 회사명을 열로 분리해 작성한다. "
+        "가능한 경우 섹션마다 1개 이상의 표를 포함한다. "
         "Do not invent sources that are not included in the input. "
         "Return valid JSON that matches the schema."
     )
@@ -223,6 +227,17 @@ def report_user_prompt(
             "sections_must_be_self_contained_and_detailed": True,
             "swot_must_be_written_by_category": True,
             "include_company_metrics_markdown_table_when_available": True,
+            "prefer_markdown_tables_for_structurable_content": True,
+            "table_minimum_columns": ["항목", "내용", "근거", "시사점"],
+            "table_required_sections_when_data_available": [
+                "market_background",
+                "lg_strategy",
+                "catl_strategy",
+                "strategy_comparison",
+                "swot",
+                "company_metrics",
+                "insights",
+            ],
             "minimum_citation_per_section": 2,
             "citation_style": "각 섹션 설명 끝에 사용한 근거 문서 ID를 대괄호로 표기",
         },
