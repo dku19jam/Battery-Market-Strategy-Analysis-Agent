@@ -16,7 +16,8 @@ class ReferenceFormattingTest(unittest.TestCase):
                     document_id="lg-report",
                     snippet="report evidence",
                     source_type="report",
-                    source="LGES IR",
+                    source="한국은행",
+                    title="2024 금융안정 보고서",
                     topics=["strategy"],
                     score=0.9,
                 ),
@@ -24,7 +25,8 @@ class ReferenceFormattingTest(unittest.TestCase):
                     document_id="lg-paper",
                     snippet="paper evidence",
                     source_type="paper",
-                    source="Journal of Batteries",
+                    source="김철수",
+                    title="AI 투자 전망",
                     topics=["strategy"],
                     score=0.8,
                 ),
@@ -41,7 +43,9 @@ class ReferenceFormattingTest(unittest.TestCase):
                     document_id="catl-web",
                     snippet="web evidence",
                     source_type="web",
-                    source="example.com",
+                    source="IEA",
+                    title="IEA 배터리 동향",
+                    url="https://www.iea.org/reports/battery",
                     topics=["strategy"],
                     score=0.7,
                 )
@@ -105,5 +109,39 @@ class ReferenceFormattingTest(unittest.TestCase):
 
         self.assertEqual(result.next_action, "report_generation")
         self.assertEqual(len(result.entries), 2)
-        self.assertIn("LGES IR", result.entries[0].formatted_reference)
-        self.assertIn("https://example.com", result.entries[1].formatted_reference)
+        self.assertIn("한국은행", result.entries[0].formatted_reference)
+        self.assertIn("IEA", result.entries[1].formatted_reference)
+        self.assertIn("https://www.iea.org/reports/battery", result.entries[1].formatted_reference)
+
+    def test_reference_block_groups_by_source_type(self) -> None:
+        from battery_agent.agents.references import ReferenceEntry, format_reference_block
+
+        block = format_reference_block(
+            [
+                ReferenceEntry(document_id="d1", source_type="web", formatted_reference="IEA(2024). IEA. https://iea.org"),
+                ReferenceEntry(document_id="d2", source_type="report", formatted_reference="한국은행(2024). 2024 금융안정 보고서."),
+                ReferenceEntry(document_id="d3", source_type="paper", formatted_reference="김철수(2024). 인공지능 산업 전망."),
+            ]
+        )
+
+        self.assertIn("### 기관 보고서", block)
+        self.assertIn("### 학술 논문", block)
+        self.assertIn("### 웹페이지", block)
+        self.assertIn("◦ 한국은행(2024). 2024 금융안정 보고서.", block)
+
+    def test_reference_block_treats_pdf_as_report(self) -> None:
+        from battery_agent.agents.references import ReferenceEntry, format_reference_block
+
+        block = format_reference_block(
+            [
+                ReferenceEntry(
+                    document_id="catl-doc",
+                    source_type="pdf",
+                    formatted_reference="CATL(2025). 2025 분기 보고서. CATL_2025_Q1",
+                )
+            ]
+        )
+
+        self.assertIn("### 기관 보고서", block)
+        self.assertNotIn("### pdf", block)
+        self.assertIn("◦ CATL(2025). 2025 분기 보고서. CATL_2025_Q1", block)
