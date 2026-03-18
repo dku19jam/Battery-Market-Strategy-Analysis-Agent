@@ -41,9 +41,12 @@ class Settings:
     openai_api_key: str
     default_companies: tuple[str, str]
     default_model: str
+    embedding_model_id: str
     default_topic: str
+    local_corpus_dir: Path
     output_root: Path
     web_search_enabled: bool
+    web_search_max_results: int
 
     @classmethod
     def from_env(cls, env_path: Path | None = None) -> "Settings":
@@ -58,7 +61,14 @@ class Settings:
             openai_api_key=api_key,
             default_companies=("LG에너지솔루션", "CATL"),
             default_model="gpt-4o-mini",
+            embedding_model_id=(
+                _env_value("BATTERY_AGENT_EMBEDDING_MODEL", dotenv_values)
+                or "Qwen/Qwen3-Embedding-0.6B"
+            ),
             default_topic="배터리 시장 전략 비교",
+            local_corpus_dir=Path(
+                _env_value("BATTERY_AGENT_CORPUS_DIR", dotenv_values) or "corpus"
+            ),
             output_root=Path(
                 _env_value("BATTERY_AGENT_OUTPUT_DIR", dotenv_values) or "artifacts"
             ),
@@ -66,5 +76,8 @@ class Settings:
                 "BATTERY_AGENT_WEB_SEARCH",
                 dotenv_values,
                 default=False,
+            ),
+            web_search_max_results=int(
+                _env_value("BATTERY_AGENT_WEB_SEARCH_MAX_RESULTS", dotenv_values) or "5"
             ),
         )

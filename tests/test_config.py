@@ -15,6 +15,9 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual(settings.openai_api_key, "test-key")
         self.assertEqual(settings.default_companies, ("LG에너지솔루션", "CATL"))
         self.assertEqual(settings.default_model, "gpt-4o-mini")
+        self.assertEqual(settings.embedding_model_id, "Qwen/Qwen3-Embedding-0.6B")
+        self.assertEqual(settings.local_corpus_dir, Path("corpus"))
+        self.assertEqual(settings.web_search_max_results, 5)
         self.assertFalse(settings.web_search_enabled)
 
     def test_from_env_raises_clear_error_without_api_key(self) -> None:
@@ -22,7 +25,7 @@ class ConfigTest(unittest.TestCase):
 
         with patch.dict(os.environ, {}, clear=True):
             with self.assertRaises(ConfigError) as ctx:
-                Settings.from_env()
+                Settings.from_env(env_path=Path("/tmp/definitely-missing-battery-agent.env"))
 
         self.assertIn("OPENAI_API_KEY", str(ctx.exception))
 
@@ -54,9 +57,22 @@ class ConfigTest(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             env_path = Path(tmp_dir) / ".env"
-            env_path.write_text("OPENAI_API_KEY=dotenv-key", encoding="utf-8")
+            env_path.write_text(
+                "\n".join(
+                    [
+                        "OPENAI_API_KEY=dotenv-key",
+                        "BATTERY_AGENT_EMBEDDING_MODEL=custom-model",
+                        "BATTERY_AGENT_CORPUS_DIR=data/corpus",
+                        "BATTERY_AGENT_WEB_SEARCH_MAX_RESULTS=9",
+                    ]
+                ),
+                encoding="utf-8",
+            )
 
             with patch.dict(os.environ, {"OPENAI_API_KEY": "env-key"}, clear=True):
                 settings = Settings.from_env(env_path=env_path)
 
         self.assertEqual(settings.openai_api_key, "env-key")
+        self.assertEqual(settings.embedding_model_id, "custom-model")
+        self.assertEqual(settings.local_corpus_dir, Path("data/corpus"))
+        self.assertEqual(settings.web_search_max_results, 9)
