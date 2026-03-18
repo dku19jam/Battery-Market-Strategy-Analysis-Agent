@@ -103,7 +103,9 @@ def _localize_sections_to_korean(
         "INSIGHTS": str(localized_payload.get("insights", "")).strip(),
     }
     # Merge with original sections and allow empty return fallbacks.
-    merged = {key: value or sections[key] for key, value in localized.items()}
+    merged = dict(sections)
+    for key, value in localized.items():
+        merged[key] = value or sections[key]
     return merged
 
 
