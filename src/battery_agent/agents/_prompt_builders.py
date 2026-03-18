@@ -6,7 +6,7 @@ import json
 
 from battery_agent.models.analysis import CompanyAnalysisResult
 from battery_agent.models.evidence import EvidenceBundle, EvidenceItem
-from battery_agent.models.report import NormalizedCompanyAnalysis
+from battery_agent.models.report import ComparisonResult, NormalizedCompanyAnalysis
 
 
 def analysis_system_prompt(company: str) -> str:
@@ -100,6 +100,84 @@ def comparison_schema() -> dict[str, object]:
             "swot",
             "insights",
             "refinement_requests",
+        ],
+        "additionalProperties": False,
+    }
+
+
+def report_system_prompt() -> str:
+    return (
+        "You are the final report generation agent. "
+        "반드시 결과물을 한국어로 만들어낼것. "
+        "summary 생성 시 증거가 부족해도 만들어 낼 수 있는 최선의 결과물을 만들어내고 "
+        "증거가 조금 부족하다는 정도의 코멘트를 추가할 것. "
+        "각 항목의 내용은 최종 보고서만으로도 파악이 가능하게 세세히 작성할 것. "
+        "Do not invent sources that are not included in the input. "
+        "Return valid JSON that matches the schema."
+    )
+
+
+def report_user_prompt(
+    topic: str,
+    lg_analysis: CompanyAnalysisResult,
+    catl_analysis: CompanyAnalysisResult,
+    comparison: ComparisonResult,
+    references: list[str],
+    partial: bool,
+) -> str:
+    payload = {
+        "topic": topic,
+        "partial": partial,
+        "lg_analysis": {
+            "company": lg_analysis.company,
+            "strategy_summary": lg_analysis.strategy_summary,
+            "strengths": lg_analysis.strengths,
+            "risks": lg_analysis.risks,
+            "citations": lg_analysis.citations,
+            "analysis_notes": lg_analysis.analysis_notes,
+            "partial": lg_analysis.partial,
+        },
+        "catl_analysis": {
+            "company": catl_analysis.company,
+            "strategy_summary": catl_analysis.strategy_summary,
+            "strengths": catl_analysis.strengths,
+            "risks": catl_analysis.risks,
+            "citations": catl_analysis.citations,
+            "analysis_notes": catl_analysis.analysis_notes,
+            "partial": catl_analysis.partial,
+        },
+        "comparison": comparison.to_dict() if hasattr(comparison, "to_dict") else comparison,
+        "references": references,
+        "requirements": {
+            "language": "ko",
+            "summary_must_be_best_effort_even_if_evidence_is_limited": True,
+            "include_short_limitations_note_when_evidence_is_limited": True,
+            "sections_must_be_self_contained_and_detailed": True,
+        },
+    }
+    return json.dumps(payload, ensure_ascii=False, indent=2)
+
+
+def report_schema() -> dict[str, object]:
+    return {
+        "type": "object",
+        "properties": {
+            "summary": {"type": "string"},
+            "market_background": {"type": "string"},
+            "lg_strategy": {"type": "string"},
+            "catl_strategy": {"type": "string"},
+            "strategy_comparison": {"type": "string"},
+            "swot": {"type": "string"},
+            "insights": {"type": "string"},
+        },
+        "required": [
+            "summary",
+            "market_background",
+            "lg_strategy",
+            "catl_strategy",
+            "strategy_comparison",
+            "swot",
+            "insights",
         ],
         "additionalProperties": False,
     }

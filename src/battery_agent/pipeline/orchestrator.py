@@ -134,6 +134,8 @@ def run_analysis_workflow(
         catl_analysis=workflow_state.catl_lane.analysis_result,
         comparison=workflow_state.comparison_result,
         references=workflow_state.reference_result,
+        llm_client=structured_llm,
+        model=settings.default_model,
         markdown_path=artifact_path_for(run_paths, "reports", "final_report", suffix="md"),
     )
     pdf_result = render_pdf_report(

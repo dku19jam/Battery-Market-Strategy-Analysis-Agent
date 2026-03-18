@@ -28,6 +28,16 @@ class OrchestratorTest(unittest.TestCase):
                         "citations": ["doc-1"],
                         "analysis_notes": "done",
                     }
+                if schema_name == "final_report_sections":
+                    return {
+                        "summary": "근거가 다소 제한적이지만 두 회사 전략 차이를 한국어로 요약한다.",
+                        "market_background": "배터리 시장 전략 비교 배경이다.",
+                        "lg_strategy": "LG 전략 상세 설명이다.",
+                        "catl_strategy": "CATL 전략 상세 설명이다.",
+                        "strategy_comparison": "두 회사 전략 비교 설명이다.",
+                        "swot": "강점, 약점, 기회, 위협 설명이다.",
+                        "insights": "의사결정에 필요한 시사점 설명이다.",
+                    }
                 return {
                     "normalized_companies": [],
                     "strategy_differences": ["차이점"],
