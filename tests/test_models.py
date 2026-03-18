@@ -5,7 +5,7 @@ class ModelsTest(unittest.TestCase):
     def test_model_round_trip_serialization(self) -> None:
         from battery_agent.models.analysis import CompanyAnalysisResult
         from battery_agent.models.evidence import EvidenceBundle, EvidenceItem
-        from battery_agent.models.report import ComparisonResult, ReportArtifact
+        from battery_agent.models.report import ComparisonResult, NormalizedCompanyAnalysis, ReportArtifact
         from battery_agent.models.retrieval import RetrievalItem, RetrievalResult
         from battery_agent.models.run_context import RunContext
 
@@ -44,6 +44,7 @@ class ModelsTest(unittest.TestCase):
             company="LG에너지솔루션",
             topics=["strategy"],
             entries=[evidence_item],
+            topic_buckets={"strategy": [evidence_item]},
             missing_topics=["risk"],
             next_action="analysis",
         )
@@ -58,6 +59,16 @@ class ModelsTest(unittest.TestCase):
             partial=False,
         )
         comparison = ComparisonResult(
+            normalized_companies=[
+                NormalizedCompanyAnalysis(
+                    company="LG에너지솔루션",
+                    strategy_summary="요약",
+                    strengths=["생산 역량"],
+                    risks=["원가 부담"],
+                    citations=["doc-1"],
+                    partial=False,
+                )
+            ],
             strategy_differences=["LG는 북미 집중, CATL은 공급망 다변화"],
             strengths_weaknesses=["LG는 생산 역량 강점, CATL은 가격 경쟁력 강점"],
             swot=["Strength: scale", "Risk: pricing"],

@@ -10,7 +10,7 @@ class ConfigTest(unittest.TestCase):
         from battery_agent.config import Settings
 
         with patch.dict(os.environ, {"OPENAI_API_KEY": "test-key"}, clear=True):
-            settings = Settings.from_env()
+            settings = Settings.from_env(env_path=Path("/tmp/definitely-missing-battery-agent.env"))
 
         self.assertEqual(settings.openai_api_key, "test-key")
         self.assertEqual(settings.default_companies, ("LG에너지솔루션", "CATL"))

@@ -9,6 +9,7 @@ description = "Battery market strategy analysis agent"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "openai>=1.0,<2.0",
     "tavily-python>=0.5,<1.0",
 ]
 

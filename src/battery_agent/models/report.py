@@ -6,7 +6,32 @@ from dataclasses import asdict, dataclass, field
 
 
 @dataclass(frozen=True)
+class NormalizedCompanyAnalysis:
+    company: str
+    strategy_summary: str
+    strengths: list[str]
+    risks: list[str]
+    citations: list[str] = field(default_factory=list)
+    partial: bool = False
+
+    def to_dict(self) -> dict[str, object]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, object]) -> "NormalizedCompanyAnalysis":
+        return cls(
+            company=str(data["company"]),
+            strategy_summary=str(data["strategy_summary"]),
+            strengths=list(data.get("strengths", [])),
+            risks=list(data.get("risks", [])),
+            citations=list(data.get("citations", [])),
+            partial=bool(data.get("partial", False)),
+        )
+
+
+@dataclass(frozen=True)
 class ComparisonResult:
+    normalized_companies: list[NormalizedCompanyAnalysis]
     strategy_differences: list[str]
     strengths_weaknesses: list[str]
     swot: list[str]
@@ -20,6 +45,10 @@ class ComparisonResult:
     @classmethod
     def from_dict(cls, data: dict[str, object]) -> "ComparisonResult":
         return cls(
+            normalized_companies=[
+                NormalizedCompanyAnalysis.from_dict(item)
+                for item in data.get("normalized_companies", [])
+            ],
             strategy_differences=list(data["strategy_differences"]),
             strengths_weaknesses=list(data["strengths_weaknesses"]),
             swot=list(data["swot"]),

@@ -34,6 +34,7 @@ class EvidenceBundle:
     company: str
     topics: list[str]
     entries: list[EvidenceItem]
+    topic_buckets: dict[str, list[EvidenceItem]]
     missing_topics: list[str]
     next_action: str
 
@@ -42,6 +43,10 @@ class EvidenceBundle:
             "company": self.company,
             "topics": self.topics,
             "entries": [entry.to_dict() for entry in self.entries],
+            "topic_buckets": {
+                topic: [entry.to_dict() for entry in entries]
+                for topic, entries in self.topic_buckets.items()
+            },
             "missing_topics": self.missing_topics,
             "next_action": self.next_action,
         }
@@ -52,6 +57,10 @@ class EvidenceBundle:
             company=str(data["company"]),
             topics=list(data["topics"]),
             entries=[EvidenceItem.from_dict(entry) for entry in data.get("entries", [])],
+            topic_buckets={
+                str(topic): [EvidenceItem.from_dict(entry) for entry in entries]
+                for topic, entries in dict(data.get("topic_buckets", {})).items()
+            },
             missing_topics=list(data.get("missing_topics", [])),
             next_action=str(data["next_action"]),
         )
