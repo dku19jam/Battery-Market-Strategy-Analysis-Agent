@@ -1,228 +1,139 @@
-# battery-agent
+# Battery Agent 발표용 개요
 
-Battery Market Strategy Analysis Agent for comparing LG Energy Solution and CATL.
+## 1. Overview
+- 목적: LG에너지솔루션과 CATL의 배터리 시장 전략을 비교 분석하고, 근거 기반 최종 보고서(Markdown/PDF)를 생성한다.
+- 입력: 로컬 PDF 코퍼스(Chroma), 웹 검색 결과(Tavily), 실행 환경 변수(.env).
+- 출력: 회사별 검색/큐레이션/분석 산출물, 비교 결과, 참고문헌, 최종 보고서.
 
-## Runtime Configuration
+## 2. Features
+- PDF 기반 Agentic RAG: PDF -> chunking -> embedding(Qwen) -> Chroma 적재/검색.
+- 웹 검색 보강: Tavily 기반 검색, 출처 편중 제한, LG/CATL 호출량 균등 분배.
+- 회사별 독립 파이프라인: Retrieval -> Evidence Curation -> Analysis.
+- 비교/보고서 자동화: Comparison -> Reference -> Report Generation -> PDF.
+- 근거 품질 관리: 참조 생성 시 품질 점수 기반 정렬/필터링.
+- 재실행 루프: `need more evidence`, `request refinement` 자동 재시도(완화 기준 + 최대 재시도 제한).
+- 보고서 품질 강화: 표로 구조화 가능한 항목은 Markdown 표 중심으로 생성.
 
-The CLI reads runtime settings from environment variables and also supports loading values from a local `.env` file. If the same key exists in both places, the OS environment variable wins.
+## 3. Tech Stack
+- Language: Python 3.11+
+- LLM: OpenAI Structured Output (`gpt-4o-mini` 기본)
+- Embedding: `Qwen/Qwen3-Embedding-0.6B`
+- Vector DB: Chroma
+- Web Search: Tavily
+- PDF Parsing: pypdf
+- PDF Rendering: markdown + weasyprint
+- Test: unittest
+- Env/Package: `.env`, `uv`, `pyproject.toml`
 
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `OPENAI_API_KEY` | Yes | None | OpenAI API key used for generation and analysis steps |
-| `TAVILY_API_KEY` | No | None | Tavily API key used when limited web search is enabled |
-| `BATTERY_AGENT_EMBEDDING_MODEL` | No | `Qwen/Qwen3-Embedding-0.6B` | Embedding model identifier for local RAG indexing |
-| `BATTERY_AGENT_EMBEDDING_DEVICE` | No | `auto` | Embedding device selection. On MacBook this resolves to `mps` first, then `cpu` |
-| `BATTERY_AGENT_EMBEDDING_BATCH_SIZE` | No | `4` | Batch size for Qwen embedding inference |
-| `BATTERY_AGENT_CORPUS_DIR` | No | `corpus` | Directory containing normalized local corpus files |
-| `BATTERY_AGENT_OUTPUT_DIR` | No | `artifacts` | Root directory for run outputs and logs |
-| `BATTERY_AGENT_CHROMA_DIR` | No | `data/chroma` | Persistent Chroma directory for embedded local corpus chunks |
-| `BATTERY_AGENT_CHROMA_COLLECTION` | No | `battery-agent` | Chroma collection name used for ingest and retrieval |
-| `BATTERY_AGENT_WEB_SEARCH` | No | `true` | Enables limited supplementary web search when set to `true` |
-| `BATTERY_AGENT_WEB_SEARCH_MAX_CALLS` | No | `6` | Maximum number of web search calls allowed per searcher instance |
-| `BATTERY_AGENT_WEB_SEARCH_MAX_RESULTS` | No | `10` | Maximum number of Tavily search results kept after source-cap filtering |
-| `BATTERY_AGENT_WEB_SEARCH_MAX_PER_SOURCE` | No | `4` | Maximum number of Tavily hits kept per domain source |
-| `BATTERY_AGENT_PDF_MIN_DOCUMENT_WORDS` | No | `200` | Minimum number of meaningful words required per PDF document to be ingested into Chroma |
-| `BATTERY_AGENT_PDF_MIN_PAGE_WORDS` | No | `50` | Minimum words required for a PDF page to be considered meaningful |
-| `BATTERY_AGENT_PDF_FOCUS_KEYWORDS` | No | `전략,사업전략,리스크,공급망,시장,배터리,매출,실적,경쟁력,포트폴리오,ESG,수익,글로벌,파이낸스,재무,전기차,ESS,투자,R&D` | Keyword set used to score PDF documents before indexing; lower case match |
+## 4. Agents 목록 및 구현 내용
+- LG Retrieval Agent
+  - 로컬 검색 + 웹 검색 결합, 쿼리 확장 적용.
+- LG Evidence Curation Agent
+  - 중복 제거, 토픽 버킷 구성, 분석 가능 상태 판정.
+- LG Analysis Agent
+  - 구조화 출력(JSON) 기반 전략/강점/리스크/지표 생성.
+- CATL Retrieval Agent
+  - LG와 동일 패턴, 회사 분리 컨텍스트로 실행.
+- CATL Evidence Curation Agent
+  - CATL 전용 근거 큐레이션.
+- CATL Analysis Agent
+  - CATL 전용 분석 결과 생성.
+- Comparison Evaluation Agent
+  - 양사 결과 정규화, 전략 차이/강약점/SWOT/인사이트/지표 통합.
+- Reference Agent
+  - 실제 사용 citation 기준 참고문헌 생성, 품질 점수 기반 정렬.
+- Report Generation Agent
+  - 한국어 최종 보고서 생성, 표 중심 형식화, 섹션별 상세화.
+- PDF Renderer
+  - Markdown -> PDF 변환.
 
-Example `.env`:
+## 5. Pattern(Distributed) 적용
+- 적용 방식: 회사별 lane을 분리한 Distributed Workflow + 중앙 Orchestrator 제어.
+- 해석 기준: 완전 탈중앙(Fully Distributed)은 아니고, `분산 실행 + 중앙 코디네이션` 구조.
+- Lane 구조:
+  - `LG Retrieval -> LG Curation -> LG Analysis`
+  - `CATL Retrieval -> CATL Curation -> CATL Analysis`
+- 합류 구조:
+  - `Comparison -> Reference -> Report -> PDF`
+- 보강:
+  - `need more evidence`와 `request refinement` 루프를 자동 재실행으로 구현.
+  - 단, 과도 반복 방지를 위해 완화 기준(품질 점수/재시도 제한) 적용.
 
-```dotenv
-OPENAI_API_KEY=your-api-key
-TAVILY_API_KEY=your-tavily-api-key
-BATTERY_AGENT_EMBEDDING_MODEL=Qwen/Qwen3-Embedding-0.6B
-BATTERY_AGENT_EMBEDDING_DEVICE=auto
-BATTERY_AGENT_EMBEDDING_BATCH_SIZE=4
-BATTERY_AGENT_CORPUS_DIR=corpus
-BATTERY_AGENT_OUTPUT_DIR=artifacts
-BATTERY_AGENT_CHROMA_DIR=data/chroma
-BATTERY_AGENT_CHROMA_COLLECTION=battery-agent
-BATTERY_AGENT_WEB_SEARCH=true
-BATTERY_AGENT_WEB_SEARCH_MAX_CALLS=6
-BATTERY_AGENT_WEB_SEARCH_MAX_RESULTS=10
-BATTERY_AGENT_WEB_SEARCH_MAX_PER_SOURCE=4
-BATTERY_AGENT_PDF_MIN_DOCUMENT_WORDS=200
-BATTERY_AGENT_PDF_MIN_PAGE_WORDS=50
-BATTERY_AGENT_PDF_FOCUS_KEYWORDS="전략,사업전략,리스크,공급망,시장,배터리,매출,실적,경쟁력,포트폴리오,ESG,수익,글로벌,파이낸스,재무,전기차,ESS,투자,R&D"
+## 6. 아키텍처
+```mermaid
+flowchart TD
+    S["__start__"] --> O["Workflow Orchestrator"]
+
+    O --> LR["LG Retrieval Agent"]
+    LR --> LC["LG Evidence Curation Agent"]
+    LC --> LA["LG Analysis Agent"]
+    LC -. "need more evidence (max 1)" .-> LR
+    LA -. "request refinement (quality 낮을 때만, max 1)" .-> LR
+
+    O --> CR["CATL Retrieval Agent"]
+    CR --> CC["CATL Evidence Curation Agent"]
+    CC --> CA["CATL Analysis Agent"]
+    CC -. "need more evidence (max 1)" .-> CR
+    CA -. "request refinement (quality 낮을 때만, max 1)" .-> CR
+
+    LA --> CMP["Comparison Evaluation Agent"]
+    CA --> CMP
+    CMP -. "analysis_refinement 요청 시 lane 재실행" .-> O
+    CMP --> REF["Reference Agent"]
+    REF --> REP["Report Generation Agent"]
+    REP --> PDF["PDF Renderer"]
+    PDF --> E["__end__"]
 ```
 
-## Defaults
-
-| Setting | Value |
-|---|---|
-| Default companies | `LG에너지솔루션`, `CATL` |
-| Default model | `gpt-4o-mini` |
-| Default topic | `배터리 시장 전략 비교` |
-
-## Local Corpus Contract
-
-Set `BATTERY_AGENT_CORPUS_DIR` to a directory that contains normalized local corpus files. The loader currently accepts `.json` and `.jsonl` files only.
-
-Each corpus record must contain the following fields:
-
-| Field | Required | Description |
-|---|---|---|
-| `document_id` | Yes | Stable identifier used across chunking and retrieval artifacts |
-| `company` | Yes | Company namespace, for example `LG에너지솔루션` or `CATL` |
-| `title` | Yes | Human-readable document title |
-| `text` | Yes | Normalized plain-text document body |
-| `source_type` | Yes | Source category such as `report`, `web`, or `memo` |
-| `page_count` | No | Integer page count used for chunking limits; defaults to `1` |
-| `topics` | No | List of topic labels used for retrieval metadata |
-| `metadata` | No | Additional JSON object for downstream processing |
-
-Loading failure policy:
-
-- Missing corpus directory raises `FileNotFoundError`.
-- Records missing required fields raise `ValueError`.
-- Unsupported file extensions are ignored.
-- Invalid records should be fixed in the corpus source before indexing proceeds.
-
-## PDF Ingest to Chroma
-
-For the preferred local RAG path, place PDFs under company-named subdirectories:
-
+## 7. 디렉토리 구조(간략)
 ```text
-corpus/
-  LG에너지솔루션/
-    lg-report-1.pdf
-    lg-report-2.pdf
-  CATL/
-    catl-report-1.pdf
+battery-agent/
+  src/battery_agent/
+    agents/        # retrieval/curation/analysis/comparison/reference/report
+    pipeline/      # orchestrator, workflow_state, handoffs
+    rag/           # pdf ingest, chunker, embedder, chroma
+    search/        # local/chroma retriever, tavily web search
+    reporting/     # markdown/pdf renderer
+    models/        # data models
+    cli.py
+  corpus/          # 회사별 PDF 코퍼스
+  artifacts/       # 실행 산출물
+  tests/           # unittest
+  README.md
+  read.md
 ```
 
-Then ingest the PDF corpus into Chroma:
+## 8. 실행 방법
+1. 환경 준비
+```bash
+uv venv .venv
+uv pip install --python .venv/bin/python -e .
+```
 
+2. 환경 변수 설정 (`.env`)
+```dotenv
+OPENAI_API_KEY=...
+TAVILY_API_KEY=...
+BATTERY_AGENT_WEB_SEARCH=true
+```
+
+3. PDF 임베딩 적재
 ```bash
 PYTHONPATH=src .venv/bin/python -m battery_agent.cli ingest-pdfs
 ```
 
-You can override paths per run:
-
+4. 통합 분석 실행
 ```bash
-PYTHONPATH=src .venv/bin/python -m battery_agent.cli ingest-pdfs --corpus-dir corpus --chroma-dir data/chroma
+PYTHONPATH=src .venv/bin/python -m battery_agent.cli --run-id manual-run
 ```
 
-Behavior:
+5. 결과 확인
+- `artifacts/<run-id>/reports/final_report.md`
+- `artifacts/<run-id>/reports/final_report.pdf`
 
-- company metadata is derived from the folder name
-- each PDF is converted to text with `pypdf`
-- chunks are embedded with `Qwen/Qwen3-Embedding-0.6B`
-- embeddings are persisted into the configured Chroma collection
-
-On Apple Silicon MacBooks, set `BATTERY_AGENT_EMBEDDING_DEVICE=auto` or `mps`.
-
-## Web Search
-
-Limited web search uses Tavily. To enable it:
-
-1. Install project dependencies so `tavily-python` is available.
-2. Set `BATTERY_AGENT_WEB_SEARCH=true`.
-3. Set `TAVILY_API_KEY` in your environment or `.env` file.
-
-When enabled, Tavily results are normalized into the internal `WebSearchResult` format and then filtered by `max_per_source` to reduce source concentration.
-
-## Run Artifacts
-
-Each run uses a per-run artifact root. The current stable directories are:
-
-- `logs/`
-- `metadata/`
-- `retrieval/`
-- `evidence/`
-- `analysis/`
-- `reports/`
-
-Saved intermediate artifacts include:
-
-- chunk snapshots and vector index metadata
-- per-company retrieval results
-- per-company curation bundles
-- per-company analysis results
-- comparison result
-- reference list
-- final Markdown/PDF report
-
-Log files include:
-
-- `logs/run.log`
-
-Partial reports are generated when one or more company lanes remain partial, when comparison requests refinement, or when references are incomplete but a bounded summary can still be rendered.
-
-## Local Test Fixtures
-
-Sample corpus fixtures are available under [tests/fixtures/sample_corpus/docs.jsonl](/Users/cjm/battery-agent/tests/fixtures/sample_corpus/docs.jsonl).
-
-Run the full test suite locally with:
-
-```bash
-PYTHONPATH=src .venv/bin/python -m unittest discover -s tests -v
-```
-
-Run a dry-run style CLI execution against the sample corpus by pointing `BATTERY_AGENT_CORPUS_DIR` to `tests/fixtures/sample_corpus`.
-
-## Design Docs
-
-- Distributed architecture: [2026-03-17-distributed-agent-architecture-design.md](/Users/cjm/battery-agent/docs/superpowers/specs/2026-03-17-distributed-agent-architecture-design.md)
-- Submission report draft: [2026-03-17-agent-system-report-draft.md](/Users/cjm/battery-agent/docs/superpowers/specs/2026-03-17-agent-system-report-draft.md)
-- Implementation plan: [2026-03-17-battery-market-strategy-analysis-agent.md](/Users/cjm/battery-agent/docs/superpowers/plans/2026-03-17-battery-market-strategy-analysis-agent.md)
-
-## Agent and Workflow Summary
-
-Workflow 5 elements:
-
-- Goal: compare LG에너지솔루션 and CATL portfolio diversification strategy and produce Korean Markdown/PDF output
-- Criteria: evidence-backed comparison, bounded web search, reproducible artifacts, partial-report fallback
-- Task: retrieval, curation, analysis, comparison, reference generation, report rendering
-- Control Strategy: distributed lanes with handoff-based transitions and retry limits
-- Structure: LG lane, CATL lane, comparison, reference, report, PDF rendering
-
-Agent graph summary:
-
-- `LG Retrieval -> LG Curation -> LG Analysis`
-- `CATL Retrieval -> CATL Curation -> CATL Analysis`
-- `Comparison -> Reference -> Report Generation -> PDF`
-
-## Report Outline
-
-- `SUMMARY`
-- `MARKET_BACKGROUND`
-- `LG_STRATEGY`
-- `CATL_STRATEGY`
-- `STRATEGY_COMPARISON`
-- `SWOT`
-- `INSIGHTS`
-- `REFERENCE`
-
-## Submission Checklist
-
-- Architecture design document included
-- Implementation plan included
-- Sample fixture and test instructions included
-- End-to-end dry-run test included
-- Markdown/PDF generation path implemented
-- Artifact and log structure documented
-
-## Analysis and Comparison
-
-Company analysis and cross-company comparison use the official OpenAI Python SDK with structured JSON output. The analysis agents build dynamic prompts from curated topic buckets and validate citations against the provided evidence set before producing artifacts.
-
-## Development
-
-Run tests with:
-
-```bash
-PYTHONPATH=src .venv/bin/python -m unittest discover -s tests -v
-```
-
-Run the CLI with:
-
-```bash
-PYTHONPATH=src .venv/bin/python -m battery_agent.cli
-```
-
-Install or refresh dependencies with:
-
-```bash
-uv pip install --python .venv/bin/python -e .
-```
+## 9. 초기 설계 대비 구조 변경 사항
+- Supervisor/계층형 중심 구상 -> 회사 lane 분리 중심 Distributed + 중앙 Orchestrator 구조로 정리.
+- 단순 1회 파이프라인 -> 증거 부족/정제 요청 자동 재실행 루프 추가.
+- 웹 검색 호출 편향 이슈 -> LG/CATL 웹 검색 호출량 균등 분배로 수정.
+- 정성 위주 보고서 -> 표 중심 보고서 생성 프롬프트 강화.
+- 참고문헌 생성 -> 근거 품질 점수 기반 정렬/필터링 로직 추가.
