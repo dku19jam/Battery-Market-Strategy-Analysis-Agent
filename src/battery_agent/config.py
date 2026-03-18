@@ -36,6 +36,14 @@ def _env_flag(name: str, dotenv_values: dict[str, str], default: bool = False) -
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _optional_env_value(name: str, dotenv_values: dict[str, str]) -> str | None:
+    value = _env_value(name, dotenv_values)
+    if value is None:
+        return None
+    normalized = value.strip()
+    return normalized or None
+
+
 @dataclass(frozen=True)
 class Settings:
     openai_api_key: str
@@ -45,6 +53,7 @@ class Settings:
     default_topic: str
     local_corpus_dir: Path
     output_root: Path
+    tavily_api_key: str | None
     web_search_enabled: bool
     web_search_max_results: int
 
@@ -72,6 +81,7 @@ class Settings:
             output_root=Path(
                 _env_value("BATTERY_AGENT_OUTPUT_DIR", dotenv_values) or "artifacts"
             ),
+            tavily_api_key=_optional_env_value("TAVILY_API_KEY", dotenv_values),
             web_search_enabled=_env_flag(
                 "BATTERY_AGENT_WEB_SEARCH",
                 dotenv_values,

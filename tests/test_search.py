@@ -105,3 +105,35 @@ class WebSearchTest(unittest.TestCase):
         self.assertEqual(len(results), 3)
         self.assertEqual(sum(1 for result in results if result.source == "same.com"), 2)
         self.assertEqual(len(payload), 3)
+
+    def test_tavily_provider_maps_api_results(self) -> None:
+        from battery_agent.search.web_search import TavilySearchProvider
+
+        class FakeTavilyClient:
+            def search(self, **kwargs: object) -> dict[str, object]:
+                self.kwargs = kwargs
+                return {
+                    "results": [
+                        {
+                            "title": "LG strategy",
+                            "url": "https://example.com/lg",
+                            "content": "portfolio diversification update",
+                        },
+                        {
+                            "title": "Missing URL",
+                            "url": "",
+                            "content": "should be dropped",
+                        },
+                    ]
+                }
+
+        client = FakeTavilyClient()
+        provider = TavilySearchProvider(client=client, max_results=4)
+
+        results = provider("LG battery strategy")
+
+        self.assertEqual(client.kwargs["query"], "LG battery strategy")
+        self.assertEqual(client.kwargs["max_results"], 4)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0].title, "LG strategy")
+        self.assertEqual(results[0].source, "example.com")

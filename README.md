@@ -9,16 +9,18 @@ The CLI reads runtime settings from environment variables and also supports load
 | Variable | Required | Default | Description |
 |---|---|---|---|
 | `OPENAI_API_KEY` | Yes | None | OpenAI API key used for generation and analysis steps |
+| `TAVILY_API_KEY` | No | None | Tavily API key used when limited web search is enabled |
 | `BATTERY_AGENT_EMBEDDING_MODEL` | No | `Qwen/Qwen3-Embedding-0.6B` | Embedding model identifier for local RAG indexing |
 | `BATTERY_AGENT_CORPUS_DIR` | No | `corpus` | Directory containing normalized local corpus files |
 | `BATTERY_AGENT_OUTPUT_DIR` | No | `artifacts` | Root directory for run outputs and logs |
 | `BATTERY_AGENT_WEB_SEARCH` | No | `false` | Enables limited supplementary web search when set to `true` |
-| `BATTERY_AGENT_WEB_SEARCH_MAX_RESULTS` | No | `5` | Maximum number of web search results kept after bias filtering |
+| `BATTERY_AGENT_WEB_SEARCH_MAX_RESULTS` | No | `5` | Maximum number of Tavily search results kept after source-cap filtering |
 
 Example `.env`:
 
 ```dotenv
 OPENAI_API_KEY=your-api-key
+TAVILY_API_KEY=your-tavily-api-key
 BATTERY_AGENT_EMBEDDING_MODEL=Qwen/Qwen3-Embedding-0.6B
 BATTERY_AGENT_CORPUS_DIR=corpus
 BATTERY_AGENT_OUTPUT_DIR=artifacts
@@ -57,6 +59,16 @@ Loading failure policy:
 - Records missing required fields raise `ValueError`.
 - Unsupported file extensions are ignored.
 - Invalid records should be fixed in the corpus source before indexing proceeds.
+
+## Web Search
+
+Limited web search uses Tavily. To enable it:
+
+1. Install project dependencies so `tavily-python` is available.
+2. Set `BATTERY_AGENT_WEB_SEARCH=true`.
+3. Set `TAVILY_API_KEY` in your environment or `.env` file.
+
+When enabled, Tavily results are normalized into the internal `WebSearchResult` format and then filtered by `max_per_source` to reduce source concentration.
 
 ## Development
 
