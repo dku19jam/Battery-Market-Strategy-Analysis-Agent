@@ -57,6 +57,7 @@ class Settings:
     web_search_enabled: bool
     web_search_max_calls: int
     web_search_max_results: int
+    web_search_max_per_source: int = 4
     chroma_dir: Path = Path("data/chroma")
     chroma_collection: str = "battery-agent"
     embedding_device: str = "auto"
@@ -122,10 +123,13 @@ class Settings:
                 default=True,
             ),
             web_search_max_calls=int(
-                _env_value("BATTERY_AGENT_WEB_SEARCH_MAX_CALLS", dotenv_values) or "3"
+                _env_value("BATTERY_AGENT_WEB_SEARCH_MAX_CALLS", dotenv_values) or "6"
             ),
             web_search_max_results=int(
-                _env_value("BATTERY_AGENT_WEB_SEARCH_MAX_RESULTS", dotenv_values) or "5"
+                _env_value("BATTERY_AGENT_WEB_SEARCH_MAX_RESULTS", dotenv_values) or "10"
+            ),
+            web_search_max_per_source=int(
+                _env_value("BATTERY_AGENT_WEB_SEARCH_MAX_PER_SOURCE", dotenv_values) or "4"
             ),
             embedding_device=(
                 _env_value("BATTERY_AGENT_EMBEDDING_DEVICE", dotenv_values) or "auto"

@@ -11,6 +11,8 @@ class EvidenceItem:
     snippet: str
     source_type: str
     source: str
+    title: str = ""
+    url: str = ""
     topics: list[str] = field(default_factory=list)
     score: float = 0.0
 
@@ -24,6 +26,8 @@ class EvidenceItem:
             snippet=str(data["snippet"]),
             source_type=str(data["source_type"]),
             source=str(data["source"]),
+            title=str(data.get("title", "")),
+            url=str(data.get("url", "")),
             topics=list(data.get("topics", [])),
             score=float(data.get("score", 0.0)),
         )

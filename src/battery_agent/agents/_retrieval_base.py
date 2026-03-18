@@ -6,7 +6,10 @@ from pathlib import Path
 from typing import Protocol
 
 from battery_agent.models.retrieval import RetrievalItem, RetrievalResult
-from battery_agent.search.query_builder import build_company_queries, rewrite_query
+from battery_agent.search.query_builder import (
+    build_company_queries,
+    build_web_search_queries,
+)
 from battery_agent.search.web_search import WebSearchResult
 from battery_agent.storage.json_store import write_json
 
@@ -37,21 +40,29 @@ def run_retrieval_agent(
     used_web_search = False
 
     if web_searcher is not None:
-        web_query = rewrite_query(f"{company} {topic}", "portfolio diversification")
-        web_items = [
-            RetrievalItem(
-                document_id=result.url,
-                chunk_id=f"web-{index}",
-                title=result.title,
-                text=result.snippet,
-                score=0.5,
-                source_type="web",
-                source=result.source,
-                topics=["strategy"],
-                url=result.url,
-            )
-            for index, result in enumerate(web_searcher.search(web_query), start=1)
-        ]
+        web_items: list[RetrievalItem] = []
+        seen_urls: set[str] = set()
+        web_index = 1
+        for web_query in build_web_search_queries(company, topic):
+            for result in web_searcher.search(web_query):
+                if result.url in seen_urls:
+                    continue
+                web_items.append(
+                    RetrievalItem(
+                        document_id=result.url,
+                        chunk_id=f"web-{web_index}",
+                        title=result.title,
+                        text=result.snippet,
+                        score=0.5,
+                        source_type="web",
+                        source=result.source,
+                        topics=["strategy"],
+                        url=result.url,
+                    )
+                )
+                web_index += 1
+                seen_urls.add(result.url)
+
         items.extend(web_items)
         used_web_search = bool(web_items)
 
@@ -74,11 +85,11 @@ def _coerce_retrieval_item(item: object) -> RetrievalItem:
     return RetrievalItem(
         document_id=str(getattr(item, "document_id")),
         chunk_id=str(getattr(item, "chunk_id")),
-        title=str(getattr(item, "document_id")),
+        title=str(getattr(item, "title", getattr(item, "document_id", ""))),
         text=str(getattr(item, "text")),
         score=float(getattr(item, "score")),
         source_type=str(getattr(item, "source_type", "local")),
-        source=str(getattr(item, "source", "local")),
+        source=str(getattr(item, "source", "")) or "local",
         topics=list(getattr(item, "topics", [])),
         url=getattr(item, "url", None),
     )

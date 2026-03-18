@@ -18,8 +18,9 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual(settings.embedding_model_id, "Qwen/Qwen3-Embedding-0.6B")
         self.assertEqual(settings.local_corpus_dir, Path("corpus"))
         self.assertIsNone(settings.tavily_api_key)
-        self.assertEqual(settings.web_search_max_calls, 3)
-        self.assertEqual(settings.web_search_max_results, 5)
+        self.assertEqual(settings.web_search_max_calls, 6)
+        self.assertEqual(settings.web_search_max_results, 10)
+        self.assertEqual(settings.web_search_max_per_source, 4)
         self.assertTrue(settings.web_search_enabled)
 
     def test_from_env_raises_clear_error_without_api_key(self) -> None:

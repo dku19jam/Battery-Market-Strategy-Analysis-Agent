@@ -12,7 +12,43 @@ class PdfRenderResult:
     warning: str | None = None
 
 
-def render_pdf_report(markdown: str, output_path: Path) -> PdfRenderResult:
+def render_pdf_report(markdown: str | Path, output_path: Path) -> PdfRenderResult:
+    markdown_path: Path | None = None
+    if isinstance(markdown, Path):
+        markdown_path = markdown
+    elif isinstance(markdown, str) and Path(markdown).exists():
+        markdown_path = Path(markdown)
+    markdown_text = markdown_path.read_text(encoding="utf-8") if markdown_path is not None else str(markdown)
+    warning: str | None = None
+
+    try:
+        import markdown as md_lib  # type: ignore
+        from weasyprint import HTML  # type: ignore
+
+        body_html = md_lib.markdown(
+            markdown_text,
+            extensions=["extra", "sane_lists", "nl2br"],
+            output_format="html5",
+        )
+        html = (
+            "<!doctype html><html><head><meta charset='utf-8'></head>"
+            "<body style='font-family: sans-serif; font-size: 12px; line-height: 1.4; margin: 24px;'>"
+            f"{body_html}"
+            "</body></html>"
+        )
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        HTML(string=html).write_pdf(str(output_path))
+        return PdfRenderResult(success=True, warning=warning)
+    except Exception:
+        warning = "External PDF renderer unavailable; fallback PDF writing was used."
+        _write_fallback_pdf(markdown_text, output_path)
+        return PdfRenderResult(
+            success=True,
+            warning=warning,
+        )
+
+
+def _write_fallback_pdf(markdown: str, output_path: Path) -> None:
     sanitized = (
         markdown.replace("\\", "\\\\")
         .replace("(", "\\(")
@@ -45,5 +81,3 @@ def render_pdf_report(markdown: str, output_path: Path) -> PdfRenderResult:
     )
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_bytes(bytes(pdf))
-    warning = "Rendered with ASCII fallback for non-Latin characters." if any(ord(ch) > 127 for ch in markdown) else None
-    return PdfRenderResult(success=True, warning=warning)

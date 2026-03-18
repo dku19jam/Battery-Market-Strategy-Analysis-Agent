@@ -10,7 +10,12 @@ from battery_agent.rag.qwen_embedder import QwenEmbeddingClient
 
 
 def ingest_pdf_corpus(settings: Settings) -> int:
-    documents = load_pdf_corpus(settings.local_corpus_dir)
+    documents = load_pdf_corpus(
+        corpus_dir=settings.local_corpus_dir,
+        min_document_words=settings.pdf_min_document_words,
+        min_page_words=settings.pdf_min_page_words,
+        focus_keywords=settings.pdf_focus_keywords,
+    )
     chunks = chunk_documents(documents, max_total_pages=None)
     embedder = QwenEmbeddingClient(
         model_id=settings.embedding_model_id,
@@ -34,7 +39,9 @@ def ingest_pdf_corpus(settings: Settings) -> int:
                     "company": chunk.company,
                     "topics": chunk.topics,
                     "source_type": "pdf",
-                    "source": "pdf-corpus",
+                    "source": chunk.source,
+                    "title": chunk.title,
+                    "url": chunk.url,
                     "page_start": chunk.page_start,
                     "page_end": chunk.page_end,
                 },

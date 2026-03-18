@@ -95,6 +95,46 @@ class LocalRetrieverTest(unittest.TestCase):
         self.assertIn("local retrieval company=LG에너지솔루션", log_text)
 
 
+class RetrievalBaseTest(unittest.TestCase):
+    def test_retrieval_agent_uses_multiple_web_queries(self) -> None:
+        from battery_agent.agents._retrieval_base import run_retrieval_agent
+        from battery_agent.search.query_builder import build_web_search_queries
+        from battery_agent.search.web_search import WebSearchResult
+
+        class DummyRetriever:
+            def search(self, *, company: str, queries: list[str], top_k: int = 5) -> list[object]:
+                return []
+
+        class FakeWebSearcher:
+            def __init__(self) -> None:
+                self.calls: list[str] = []
+
+            def search(self, query: str) -> list[WebSearchResult]:
+                self.calls.append(query)
+                return [
+                    WebSearchResult(
+                        title=f"{query} title",
+                        url="https://example.com/shared",
+                        source="example.com",
+                        snippet=f"{query} snippet",
+                    )
+                ]
+
+        fake_web_searcher = FakeWebSearcher()
+        expected_calls = build_web_search_queries("LG에너지솔루션", "배터리 시장 전략 비교")
+        result = run_retrieval_agent(
+            company="LG에너지솔루션",
+            topic="배터리 시장 전략 비교",
+            local_retriever=DummyRetriever(),
+            web_searcher=fake_web_searcher,
+            min_hits=0,
+        )
+
+        self.assertEqual(fake_web_searcher.calls, expected_calls)
+        self.assertEqual(len(result.items), 1)
+        self.assertEqual(result.items[0].source_type, "web")
+
+
 class WebSearchTest(unittest.TestCase):
     def test_web_search_limits_results_and_caps_single_source(self) -> None:
         from battery_agent.search.web_search import LimitedWebSearcher, WebSearchResult

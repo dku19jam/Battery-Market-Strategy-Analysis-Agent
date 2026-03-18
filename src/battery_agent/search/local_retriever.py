@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Callable
 
@@ -18,7 +18,11 @@ class RetrievalHit:
     score: float
     text: str
     company: str
-    topics: list[str]
+    title: str = ""
+    source_type: str = "local"
+    source: str = "local"
+    url: str | None = None
+    topics: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -64,6 +68,10 @@ class LocalRetriever:
                     score=score,
                     text=match.text,
                     company=str(match.metadata.get("company", "")),
+                    title=str(match.metadata.get("title", "")),
+                    source_type=str(match.metadata.get("source_type", "local")),
+                    source=str(match.metadata.get("source", "local")),
+                    url=match.metadata.get("url"),
                     topics=list(match.metadata.get("topics", [])),
                 )
                 current = aggregated.get(hit.chunk_id)

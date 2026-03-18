@@ -18,8 +18,9 @@ The CLI reads runtime settings from environment variables and also supports load
 | `BATTERY_AGENT_CHROMA_DIR` | No | `data/chroma` | Persistent Chroma directory for embedded local corpus chunks |
 | `BATTERY_AGENT_CHROMA_COLLECTION` | No | `battery-agent` | Chroma collection name used for ingest and retrieval |
 | `BATTERY_AGENT_WEB_SEARCH` | No | `true` | Enables limited supplementary web search when set to `true` |
-| `BATTERY_AGENT_WEB_SEARCH_MAX_CALLS` | No | `3` | Maximum number of web search calls allowed per searcher instance |
-| `BATTERY_AGENT_WEB_SEARCH_MAX_RESULTS` | No | `5` | Maximum number of Tavily search results kept after source-cap filtering |
+| `BATTERY_AGENT_WEB_SEARCH_MAX_CALLS` | No | `6` | Maximum number of web search calls allowed per searcher instance |
+| `BATTERY_AGENT_WEB_SEARCH_MAX_RESULTS` | No | `10` | Maximum number of Tavily search results kept after source-cap filtering |
+| `BATTERY_AGENT_WEB_SEARCH_MAX_PER_SOURCE` | No | `4` | Maximum number of Tavily hits kept per domain source |
 | `BATTERY_AGENT_PDF_MIN_DOCUMENT_WORDS` | No | `200` | Minimum number of meaningful words required per PDF document to be ingested into Chroma |
 | `BATTERY_AGENT_PDF_MIN_PAGE_WORDS` | No | `50` | Minimum words required for a PDF page to be considered meaningful |
 | `BATTERY_AGENT_PDF_FOCUS_KEYWORDS` | No | `전략,사업전략,리스크,공급망,시장,배터리,매출,실적,경쟁력,포트폴리오,ESG,수익,글로벌,파이낸스,재무,전기차,ESS,투자,R&D` | Keyword set used to score PDF documents before indexing; lower case match |
@@ -37,8 +38,9 @@ BATTERY_AGENT_OUTPUT_DIR=artifacts
 BATTERY_AGENT_CHROMA_DIR=data/chroma
 BATTERY_AGENT_CHROMA_COLLECTION=battery-agent
 BATTERY_AGENT_WEB_SEARCH=true
-BATTERY_AGENT_WEB_SEARCH_MAX_CALLS=3
-BATTERY_AGENT_WEB_SEARCH_MAX_RESULTS=5
+BATTERY_AGENT_WEB_SEARCH_MAX_CALLS=6
+BATTERY_AGENT_WEB_SEARCH_MAX_RESULTS=10
+BATTERY_AGENT_WEB_SEARCH_MAX_PER_SOURCE=4
 BATTERY_AGENT_PDF_MIN_DOCUMENT_WORDS=200
 BATTERY_AGENT_PDF_MIN_PAGE_WORDS=50
 BATTERY_AGENT_PDF_FOCUS_KEYWORDS="전략,사업전략,리스크,공급망,시장,배터리,매출,실적,경쟁력,포트폴리오,ESG,수익,글로벌,파이낸스,재무,전기차,ESS,투자,R&D"
