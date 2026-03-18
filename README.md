@@ -14,6 +14,7 @@ The CLI reads runtime settings from environment variables and also supports load
 | `BATTERY_AGENT_CORPUS_DIR` | No | `corpus` | Directory containing normalized local corpus files |
 | `BATTERY_AGENT_OUTPUT_DIR` | No | `artifacts` | Root directory for run outputs and logs |
 | `BATTERY_AGENT_WEB_SEARCH` | No | `false` | Enables limited supplementary web search when set to `true` |
+| `BATTERY_AGENT_WEB_SEARCH_MAX_CALLS` | No | `3` | Maximum number of web search calls allowed per searcher instance |
 | `BATTERY_AGENT_WEB_SEARCH_MAX_RESULTS` | No | `5` | Maximum number of Tavily search results kept after source-cap filtering |
 
 Example `.env`:
@@ -25,6 +26,7 @@ BATTERY_AGENT_EMBEDDING_MODEL=Qwen/Qwen3-Embedding-0.6B
 BATTERY_AGENT_CORPUS_DIR=corpus
 BATTERY_AGENT_OUTPUT_DIR=artifacts
 BATTERY_AGENT_WEB_SEARCH=false
+BATTERY_AGENT_WEB_SEARCH_MAX_CALLS=3
 BATTERY_AGENT_WEB_SEARCH_MAX_RESULTS=5
 ```
 
@@ -69,6 +71,17 @@ Limited web search uses Tavily. To enable it:
 3. Set `TAVILY_API_KEY` in your environment or `.env` file.
 
 When enabled, Tavily results are normalized into the internal `WebSearchResult` format and then filtered by `max_per_source` to reduce source concentration.
+
+## Run Artifacts
+
+Each run uses a per-run artifact root. The current stable directories are:
+
+- `logs/`
+- `metadata/`
+- `retrieval/`
+- `evidence/`
+- `analysis/`
+- `reports/`
 
 ## Analysis and Comparison
 
