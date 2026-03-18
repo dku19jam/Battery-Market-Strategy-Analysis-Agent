@@ -7,8 +7,10 @@ from pathlib import Path
 from typing import Sequence
 
 from battery_agent.config import Settings
+from battery_agent.llm.openai_structured import StructuredOpenAIClient
 from battery_agent.logging_utils import build_console_logger
 from battery_agent.logging_utils import build_run_logger
+from battery_agent.pipeline.orchestrator import run_analysis_workflow
 from battery_agent.storage.paths import build_run_paths, ensure_run_directories
 
 
@@ -24,6 +26,9 @@ def build_parser() -> argparse.ArgumentParser:
         default="manual-run",
         help="Run identifier used for artifact directories",
     )
+    parser.add_argument("--corpus-dir", help="Override corpus directory")
+    parser.add_argument("--output-dir", help="Override output directory")
+    parser.add_argument("--web-search", action="store_true", help="Enable web search for this run")
     return parser
 
 
@@ -32,6 +37,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     settings = Settings.from_env()
+    if args.corpus_dir:
+        settings = type(settings)(**{**settings.__dict__, "local_corpus_dir": Path(args.corpus_dir)})
+    if args.output_dir:
+        settings = type(settings)(**{**settings.__dict__, "output_root": Path(args.output_dir)})
+    if args.web_search:
+        settings = type(settings)(**{**settings.__dict__, "web_search_enabled": True})
     run_paths = build_run_paths(settings.output_root, args.run_id)
     ensure_run_directories(run_paths)
 
@@ -39,7 +50,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     run_logger = build_run_logger("battery-agent.cli.run", run_paths.logs_dir / "run.log")
     logger.info("battery-agent execution started")
     run_logger.info("battery-agent execution started")
+    workflow_state = run_analysis_workflow(
+        settings=settings,
+        topic=args.topic,
+        run_id=args.run_id,
+        llm_client=StructuredOpenAIClient(api_key=settings.openai_api_key),
+    )
     print(f"battery-agent: {args.topic}")
+    print(f"status: {workflow_state.status}")
+    if workflow_state.report_artifact is not None:
+        print(f"markdown: {workflow_state.report_artifact.markdown_path}")
+        print(f"pdf: {workflow_state.report_artifact.pdf_path}")
     logger.info("battery-agent execution finished")
     run_logger.info("battery-agent execution finished")
     return 0

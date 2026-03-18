@@ -30,6 +30,43 @@ class NormalizedCompanyAnalysis:
 
 
 @dataclass(frozen=True)
+class ReferenceEntry:
+    document_id: str
+    source_type: str
+    formatted_reference: str
+
+    def to_dict(self) -> dict[str, object]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, object]) -> "ReferenceEntry":
+        return cls(
+            document_id=str(data["document_id"]),
+            source_type=str(data["source_type"]),
+            formatted_reference=str(data["formatted_reference"]),
+        )
+
+
+@dataclass(frozen=True)
+class ReferenceResult:
+    entries: list[ReferenceEntry]
+    next_action: str = "report_generation"
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "entries": [entry.to_dict() for entry in self.entries],
+            "next_action": self.next_action,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, object]) -> "ReferenceResult":
+        return cls(
+            entries=[ReferenceEntry.from_dict(item) for item in data.get("entries", [])],
+            next_action=str(data.get("next_action", "report_generation")),
+        )
+
+
+@dataclass(frozen=True)
 class ComparisonResult:
     normalized_companies: list[NormalizedCompanyAnalysis]
     strategy_differences: list[str]
@@ -63,6 +100,7 @@ class ReportArtifact:
     title: str
     markdown_path: str
     pdf_path: str
+    partial: bool = False
 
     def to_dict(self) -> dict[str, str]:
         return asdict(self)

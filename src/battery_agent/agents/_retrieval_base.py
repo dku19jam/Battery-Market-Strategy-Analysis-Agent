@@ -12,7 +12,7 @@ from battery_agent.storage.json_store import write_json
 
 
 class LocalRetrieverLike(Protocol):
-    def search(self, company: str, queries: list[str], top_k: int = 5) -> list[RetrievalItem]:
+    def search(self, company: str, queries: list[str], top_k: int = 5) -> list[object]:
         ...
 
 
@@ -30,7 +30,10 @@ def run_retrieval_agent(
     min_hits: int = 2,
 ) -> RetrievalResult:
     queries = build_company_queries(company, topic)
-    items = list(local_retriever.search(company=company, queries=queries, top_k=max(min_hits, 5)))
+    items = [
+        _coerce_retrieval_item(item)
+        for item in local_retriever.search(company=company, queries=queries, top_k=max(min_hits, 5))
+    ]
     used_web_search = False
 
     if len(items) < min_hits and web_searcher is not None:
@@ -63,3 +66,19 @@ def run_retrieval_agent(
     if artifact_path is not None:
         write_json(artifact_path, result.to_dict())
     return result
+
+
+def _coerce_retrieval_item(item: object) -> RetrievalItem:
+    if isinstance(item, RetrievalItem):
+        return item
+    return RetrievalItem(
+        document_id=str(getattr(item, "document_id")),
+        chunk_id=str(getattr(item, "chunk_id")),
+        title=str(getattr(item, "document_id")),
+        text=str(getattr(item, "text")),
+        score=float(getattr(item, "score")),
+        source_type=str(getattr(item, "source_type", "local")),
+        source=str(getattr(item, "source", "local")),
+        topics=list(getattr(item, "topics", [])),
+        url=getattr(item, "url", None),
+    )
