@@ -83,6 +83,76 @@ Each run uses a per-run artifact root. The current stable directories are:
 - `analysis/`
 - `reports/`
 
+Saved intermediate artifacts include:
+
+- chunk snapshots and vector index metadata
+- per-company retrieval results
+- per-company curation bundles
+- per-company analysis results
+- comparison result
+- reference list
+- final Markdown/PDF report
+
+Log files include:
+
+- `logs/run.log`
+
+Partial reports are generated when one or more company lanes remain partial, when comparison requests refinement, or when references are incomplete but a bounded summary can still be rendered.
+
+## Local Test Fixtures
+
+Sample corpus fixtures are available under [tests/fixtures/sample_corpus/docs.jsonl](/Users/cjm/battery-agent/tests/fixtures/sample_corpus/docs.jsonl).
+
+Run the full test suite locally with:
+
+```bash
+PYTHONPATH=src .venv/bin/python -m unittest discover -s tests -v
+```
+
+Run a dry-run style CLI execution against the sample corpus by pointing `BATTERY_AGENT_CORPUS_DIR` to `tests/fixtures/sample_corpus`.
+
+## Design Docs
+
+- Distributed architecture: [2026-03-17-distributed-agent-architecture-design.md](/Users/cjm/battery-agent/docs/superpowers/specs/2026-03-17-distributed-agent-architecture-design.md)
+- Submission report draft: [2026-03-17-agent-system-report-draft.md](/Users/cjm/battery-agent/docs/superpowers/specs/2026-03-17-agent-system-report-draft.md)
+- Implementation plan: [2026-03-17-battery-market-strategy-analysis-agent.md](/Users/cjm/battery-agent/docs/superpowers/plans/2026-03-17-battery-market-strategy-analysis-agent.md)
+
+## Agent and Workflow Summary
+
+Workflow 5 elements:
+
+- Goal: compare LG에너지솔루션 and CATL portfolio diversification strategy and produce Korean Markdown/PDF output
+- Criteria: evidence-backed comparison, bounded web search, reproducible artifacts, partial-report fallback
+- Task: retrieval, curation, analysis, comparison, reference generation, report rendering
+- Control Strategy: distributed lanes with handoff-based transitions and retry limits
+- Structure: LG lane, CATL lane, comparison, reference, report, PDF rendering
+
+Agent graph summary:
+
+- `LG Retrieval -> LG Curation -> LG Analysis`
+- `CATL Retrieval -> CATL Curation -> CATL Analysis`
+- `Comparison -> Reference -> Report Generation -> PDF`
+
+## Report Outline
+
+- `SUMMARY`
+- `MARKET_BACKGROUND`
+- `LG_STRATEGY`
+- `CATL_STRATEGY`
+- `STRATEGY_COMPARISON`
+- `SWOT`
+- `INSIGHTS`
+- `REFERENCE`
+
+## Submission Checklist
+
+- Architecture design document included
+- Implementation plan included
+- Sample fixture and test instructions included
+- End-to-end dry-run test included
+- Markdown/PDF generation path implemented
+- Artifact and log structure documented
+
 ## Analysis and Comparison
 
 Company analysis and cross-company comparison use the official OpenAI Python SDK with structured JSON output. The analysis agents build dynamic prompts from curated topic buckets and validate citations against the provided evidence set before producing artifacts.
