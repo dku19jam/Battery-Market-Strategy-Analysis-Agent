@@ -11,8 +11,12 @@ The CLI reads runtime settings from environment variables and also supports load
 | `OPENAI_API_KEY` | Yes | None | OpenAI API key used for generation and analysis steps |
 | `TAVILY_API_KEY` | No | None | Tavily API key used when limited web search is enabled |
 | `BATTERY_AGENT_EMBEDDING_MODEL` | No | `Qwen/Qwen3-Embedding-0.6B` | Embedding model identifier for local RAG indexing |
+| `BATTERY_AGENT_EMBEDDING_DEVICE` | No | `auto` | Embedding device selection. On MacBook this resolves to `mps` first, then `cpu` |
+| `BATTERY_AGENT_EMBEDDING_BATCH_SIZE` | No | `4` | Batch size for Qwen embedding inference |
 | `BATTERY_AGENT_CORPUS_DIR` | No | `corpus` | Directory containing normalized local corpus files |
 | `BATTERY_AGENT_OUTPUT_DIR` | No | `artifacts` | Root directory for run outputs and logs |
+| `BATTERY_AGENT_CHROMA_DIR` | No | `data/chroma` | Persistent Chroma directory for embedded local corpus chunks |
+| `BATTERY_AGENT_CHROMA_COLLECTION` | No | `battery-agent` | Chroma collection name used for ingest and retrieval |
 | `BATTERY_AGENT_WEB_SEARCH` | No | `false` | Enables limited supplementary web search when set to `true` |
 | `BATTERY_AGENT_WEB_SEARCH_MAX_CALLS` | No | `3` | Maximum number of web search calls allowed per searcher instance |
 | `BATTERY_AGENT_WEB_SEARCH_MAX_RESULTS` | No | `5` | Maximum number of Tavily search results kept after source-cap filtering |
@@ -23,8 +27,12 @@ Example `.env`:
 OPENAI_API_KEY=your-api-key
 TAVILY_API_KEY=your-tavily-api-key
 BATTERY_AGENT_EMBEDDING_MODEL=Qwen/Qwen3-Embedding-0.6B
+BATTERY_AGENT_EMBEDDING_DEVICE=auto
+BATTERY_AGENT_EMBEDDING_BATCH_SIZE=4
 BATTERY_AGENT_CORPUS_DIR=corpus
 BATTERY_AGENT_OUTPUT_DIR=artifacts
+BATTERY_AGENT_CHROMA_DIR=data/chroma
+BATTERY_AGENT_CHROMA_COLLECTION=battery-agent
 BATTERY_AGENT_WEB_SEARCH=false
 BATTERY_AGENT_WEB_SEARCH_MAX_CALLS=3
 BATTERY_AGENT_WEB_SEARCH_MAX_RESULTS=5
@@ -61,6 +69,40 @@ Loading failure policy:
 - Records missing required fields raise `ValueError`.
 - Unsupported file extensions are ignored.
 - Invalid records should be fixed in the corpus source before indexing proceeds.
+
+## PDF Ingest to Chroma
+
+For the preferred local RAG path, place PDFs under company-named subdirectories:
+
+```text
+corpus/
+  LG에너지솔루션/
+    lg-report-1.pdf
+    lg-report-2.pdf
+  CATL/
+    catl-report-1.pdf
+```
+
+Then ingest the PDF corpus into Chroma:
+
+```bash
+PYTHONPATH=src .venv/bin/python -m battery_agent.cli ingest-pdfs
+```
+
+You can override paths per run:
+
+```bash
+PYTHONPATH=src .venv/bin/python -m battery_agent.cli ingest-pdfs --corpus-dir corpus --chroma-dir data/chroma
+```
+
+Behavior:
+
+- company metadata is derived from the folder name
+- each PDF is converted to text with `pypdf`
+- chunks are embedded with `Qwen/Qwen3-Embedding-0.6B`
+- embeddings are persisted into the configured Chroma collection
+
+On Apple Silicon MacBooks, set `BATTERY_AGENT_EMBEDDING_DEVICE=auto` or `mps`.
 
 ## Web Search
 
@@ -169,4 +211,10 @@ Run the CLI with:
 
 ```bash
 PYTHONPATH=src .venv/bin/python -m battery_agent.cli
+```
+
+Install or refresh dependencies with:
+
+```bash
+uv pip install --python .venv/bin/python -e .
 ```
