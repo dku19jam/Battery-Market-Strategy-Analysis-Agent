@@ -18,9 +18,11 @@ from battery_agent.llm.openai_structured import StructuredOpenAIClient
 from battery_agent.logging_utils import build_run_logger
 from battery_agent.models.run_context import RunContext
 from battery_agent.models.report import ReportArtifact
+from battery_agent.rag.chroma_store import ChromaVectorStore
 from battery_agent.rag.chunker import chunk_documents, write_chunk_artifact
 from battery_agent.rag.corpus_loader import load_corpus
 from battery_agent.rag.embedder import HashingEmbedder
+from battery_agent.rag.qwen_embedder import QwenEmbeddingClient
 from battery_agent.rag.vector_index import (
     InMemoryVectorIndex,
     VectorRecord,
@@ -31,6 +33,7 @@ from battery_agent.rag.vector_index import (
 from battery_agent.reporting.pdf_renderer import render_pdf_report
 from battery_agent.storage.json_store import write_json
 from battery_agent.storage.paths import artifact_path_for, build_run_paths, ensure_run_directories
+from battery_agent.search.chroma_retriever import ChromaRetriever
 from battery_agent.search.local_retriever import LocalRetriever
 from battery_agent.search.web_search import build_tavily_web_searcher
 from battery_agent.pipeline.handoffs import final_workflow_status
@@ -62,37 +65,7 @@ def run_analysis_workflow(
         catl_lane=LaneState(company="CATL"),
     )
 
-    documents = load_corpus(settings.local_corpus_dir)
-    chunks = chunk_documents(documents)
-    write_chunk_artifact(artifact_path_for(run_paths, "metadata", "chunks"), chunks)
-
-    embedder = HashingEmbedder(cache_dir=run_paths.metadata_dir / "embedding_cache")
-    index_path = artifact_path_for(run_paths, "metadata", "vector_index")
-    metadata_path = artifact_path_for(run_paths, "metadata", "vector_index_meta")
-    if should_rebuild_index(index_path, metadata_path, corpus_fingerprint):
-        index = InMemoryVectorIndex()
-        embeddings = embedder.embed([chunk.text for chunk in chunks])
-        records = [
-            VectorRecord(
-                record_id=chunk.chunk_id,
-                document_id=chunk.document_id,
-                text=chunk.text,
-                embedding=embedding,
-                metadata={"company": chunk.company, "topics": chunk.topics},
-            )
-            for chunk, embedding in zip(chunks, embeddings)
-        ]
-        index.add(records)
-        index.dump(index_path)
-        write_index_metadata(metadata_path, corpus_fingerprint)
-    else:
-        index = InMemoryVectorIndex.load(index_path)
-
-    local_retriever = LocalRetriever(
-        index=index,
-        embed_query=lambda query: embedder.embed([query])[0],
-        logger=logger,
-    )
+    local_retriever = build_local_retriever(settings=settings, run_root=run_paths.root, logger=logger)
     web_searcher = None
     if settings.web_search_enabled and settings.tavily_api_key:
         web_searcher = build_tavily_web_searcher(
@@ -180,6 +153,84 @@ def run_analysis_workflow(
     write_json(artifact_path_for(run_paths, "metadata", "workflow_state"), _workflow_state_dict(workflow_state))
     logger.info("workflow completed status=%s", workflow_state.status)
     return workflow_state
+
+
+def build_local_retriever(
+    settings: Settings,
+    run_root: Path,
+    logger: object | None,
+) -> object:
+    chroma_retriever = open_chroma_retriever(settings=settings, logger=logger)
+    if chroma_retriever is not None:
+        return chroma_retriever
+    return _build_in_memory_retriever(settings=settings, run_root=run_root, logger=logger)
+
+
+def open_chroma_retriever(
+    settings: Settings,
+    logger: object | None,
+) -> ChromaRetriever | None:
+    try:
+        store = ChromaVectorStore.open(
+            chroma_dir=settings.chroma_dir,
+            collection_name=settings.chroma_collection,
+        )
+    except RuntimeError:
+        return None
+
+    if not store.has_records():
+        return None
+
+    embedder = QwenEmbeddingClient(
+        model_id=settings.embedding_model_id,
+        device=settings.embedding_device,
+        batch_size=settings.embedding_batch_size,
+    )
+    return ChromaRetriever(
+        store=store,
+        embed_query=lambda query: embedder.embed_queries([query])[0],
+        logger=logger,
+    )
+
+
+def _build_in_memory_retriever(
+    settings: Settings,
+    run_root: Path,
+    logger: object | None,
+) -> LocalRetriever:
+    documents = load_corpus(settings.local_corpus_dir)
+    chunks = chunk_documents(documents)
+    metadata_dir = run_root / "metadata"
+    write_chunk_artifact(metadata_dir / "chunks.json", chunks)
+
+    embedder = HashingEmbedder(cache_dir=metadata_dir / "embedding_cache")
+    index_path = metadata_dir / "vector_index.json"
+    metadata_path = metadata_dir / "vector_index_meta.json"
+    corpus_fingerprint = compute_corpus_fingerprint(settings.local_corpus_dir)
+    if should_rebuild_index(index_path, metadata_path, corpus_fingerprint):
+        index = InMemoryVectorIndex()
+        embeddings = embedder.embed([chunk.text for chunk in chunks])
+        records = [
+            VectorRecord(
+                record_id=chunk.chunk_id,
+                document_id=chunk.document_id,
+                text=chunk.text,
+                embedding=embedding,
+                metadata={"company": chunk.company, "topics": chunk.topics},
+            )
+            for chunk, embedding in zip(chunks, embeddings)
+        ]
+        index.add(records)
+        index.dump(index_path)
+        write_index_metadata(metadata_path, corpus_fingerprint)
+    else:
+        index = InMemoryVectorIndex.load(index_path)
+
+    return LocalRetriever(
+        index=index,
+        embed_query=lambda query: embedder.embed([query])[0],
+        logger=logger,
+    )
 
 
 def _workflow_state_dict(state: WorkflowState) -> dict[str, object]:

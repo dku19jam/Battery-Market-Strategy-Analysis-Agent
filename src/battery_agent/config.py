@@ -57,6 +57,10 @@ class Settings:
     web_search_enabled: bool
     web_search_max_calls: int
     web_search_max_results: int
+    chroma_dir: Path = Path("data/chroma")
+    chroma_collection: str = "battery-agent"
+    embedding_device: str = "auto"
+    embedding_batch_size: int = 4
 
     @classmethod
     def from_env(cls, env_path: Path | None = None) -> "Settings":
@@ -82,6 +86,12 @@ class Settings:
             output_root=Path(
                 _env_value("BATTERY_AGENT_OUTPUT_DIR", dotenv_values) or "artifacts"
             ),
+            chroma_dir=Path(
+                _env_value("BATTERY_AGENT_CHROMA_DIR", dotenv_values) or "data/chroma"
+            ),
+            chroma_collection=(
+                _env_value("BATTERY_AGENT_CHROMA_COLLECTION", dotenv_values) or "battery-agent"
+            ),
             tavily_api_key=_optional_env_value("TAVILY_API_KEY", dotenv_values),
             web_search_enabled=_env_flag(
                 "BATTERY_AGENT_WEB_SEARCH",
@@ -93,5 +103,11 @@ class Settings:
             ),
             web_search_max_results=int(
                 _env_value("BATTERY_AGENT_WEB_SEARCH_MAX_RESULTS", dotenv_values) or "5"
+            ),
+            embedding_device=(
+                _env_value("BATTERY_AGENT_EMBEDDING_DEVICE", dotenv_values) or "auto"
+            ),
+            embedding_batch_size=int(
+                _env_value("BATTERY_AGENT_EMBEDDING_BATCH_SIZE", dotenv_values) or "4"
             ),
         )

@@ -11,11 +11,19 @@ from battery_agent.llm.openai_structured import StructuredOpenAIClient
 from battery_agent.logging_utils import build_console_logger
 from battery_agent.logging_utils import build_run_logger
 from battery_agent.pipeline.orchestrator import run_analysis_workflow
+from battery_agent.rag.pdf_ingest import ingest_pdf_corpus
 from battery_agent.storage.paths import build_run_paths, ensure_run_directories
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="battery-agent")
+    parser.add_argument(
+        "command",
+        nargs="?",
+        choices=("analyze", "ingest-pdfs"),
+        default="analyze",
+        help="Run analysis or ingest PDF corpus into Chroma",
+    )
     parser.add_argument(
         "--topic",
         default="배터리 시장 전략 비교",
@@ -28,6 +36,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--corpus-dir", help="Override corpus directory")
     parser.add_argument("--output-dir", help="Override output directory")
+    parser.add_argument("--chroma-dir", help="Override Chroma directory")
     parser.add_argument("--web-search", action="store_true", help="Enable web search for this run")
     return parser
 
@@ -41,8 +50,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         settings = type(settings)(**{**settings.__dict__, "local_corpus_dir": Path(args.corpus_dir)})
     if args.output_dir:
         settings = type(settings)(**{**settings.__dict__, "output_root": Path(args.output_dir)})
+    if args.chroma_dir:
+        settings = type(settings)(**{**settings.__dict__, "chroma_dir": Path(args.chroma_dir)})
     if args.web_search:
         settings = type(settings)(**{**settings.__dict__, "web_search_enabled": True})
+
+    if args.command == "ingest-pdfs":
+        ingested = ingest_pdf_corpus(settings)
+        print(f"ingested: {ingested}")
+        return 0
+
     run_paths = build_run_paths(settings.output_root, args.run_id)
     ensure_run_directories(run_paths)
 

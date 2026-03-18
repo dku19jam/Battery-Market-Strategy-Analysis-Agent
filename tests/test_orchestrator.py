@@ -96,3 +96,43 @@ class OrchestratorTest(unittest.TestCase):
         self.assertEqual(result.status, "completed")
         self.assertTrue(markdown_exists)
         self.assertTrue(pdf_exists)
+
+    def test_orchestrator_prefers_chroma_retriever_when_available(self) -> None:
+        from battery_agent.config import Settings
+        from battery_agent.pipeline.orchestrator import build_local_retriever
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            settings = Settings(
+                openai_api_key="test-key",
+                default_companies=("LG에너지솔루션", "CATL"),
+                default_model="gpt-4o-mini",
+                embedding_model_id="Qwen/Qwen3-Embedding-0.6B",
+                default_topic="배터리 시장 전략 비교",
+                local_corpus_dir=Path(tmp_dir) / "corpus",
+                output_root=Path(tmp_dir) / "artifacts",
+                chroma_dir=Path(tmp_dir) / "chroma",
+                chroma_collection="battery-agent",
+                tavily_api_key=None,
+                web_search_enabled=False,
+                web_search_max_calls=3,
+                web_search_max_results=5,
+                embedding_device="auto",
+                embedding_batch_size=4,
+            )
+            settings.local_corpus_dir.mkdir(parents=True, exist_ok=True)
+            run_dir = settings.output_root / "run-001"
+            run_dir.mkdir(parents=True, exist_ok=True)
+
+            chroma_retriever = object()
+
+            with unittest.mock.patch(
+                "battery_agent.pipeline.orchestrator.open_chroma_retriever",
+                return_value=chroma_retriever,
+            ) as chroma_mock, unittest.mock.patch(
+                "battery_agent.pipeline.orchestrator.load_corpus",
+            ) as load_corpus_mock:
+                retriever = build_local_retriever(settings=settings, run_root=run_dir, logger=None)
+
+        self.assertIs(retriever, chroma_retriever)
+        chroma_mock.assert_called_once()
+        load_corpus_mock.assert_not_called()

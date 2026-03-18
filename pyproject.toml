@@ -9,8 +9,12 @@ description = "Battery market strategy analysis agent"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "chromadb>=0.5,<1.0",
     "openai>=1.0,<2.0",
+    "pypdf>=5.0,<6.0",
     "tavily-python>=0.5,<1.0",
+    "torch>=2.2,<3.0",
+    "transformers>=4.51,<5.0",
 ]
 
 [project.scripts]
