@@ -60,25 +60,20 @@ def run_analysis_workflow(
             "web_search": settings.web_search_enabled,
             "web_search_max_calls": settings.web_search_max_calls,
             "web_search_max_results": settings.web_search_max_results,
+            "web_search_max_per_source": settings.web_search_max_per_source,
         },
         lg_lane=LaneState(company="LG에너지솔루션"),
         catl_lane=LaneState(company="CATL"),
     )
 
     local_retriever = build_local_retriever(settings=settings, run_root=run_paths.root, logger=logger)
-    web_searcher = None
-    if settings.web_search_enabled and settings.tavily_api_key:
-        web_searcher = build_tavily_web_searcher(
-            api_key=settings.tavily_api_key,
-            max_results=settings.web_search_max_results,
-            max_calls=settings.web_search_max_calls,
-        )
+    lg_web_searcher, catl_web_searcher = build_company_web_searchers(settings)
     structured_llm = llm_client or StructuredOpenAIClient(api_key=settings.openai_api_key)
 
     workflow_state.lg_lane.retrieval_result = run_lg_retrieval(
         topic=topic,
         local_retriever=local_retriever,
-        web_searcher=web_searcher,
+        web_searcher=lg_web_searcher,
         artifact_path=artifact_path_for(run_paths, "retrieval", "lg_retrieval"),
     )
     workflow_state.lg_lane.evidence_bundle = run_lg_curation(
@@ -98,7 +93,7 @@ def run_analysis_workflow(
     workflow_state.catl_lane.retrieval_result = run_catl_retrieval(
         topic=topic,
         local_retriever=local_retriever,
-        web_searcher=web_searcher,
+        web_searcher=catl_web_searcher,
         artifact_path=artifact_path_for(run_paths, "retrieval", "catl_retrieval"),
     )
     workflow_state.catl_lane.evidence_bundle = run_catl_curation(
@@ -128,6 +123,8 @@ def run_analysis_workflow(
         comparison=workflow_state.comparison_result,
         artifact_path=artifact_path_for(run_paths, "reports", "references"),
     )
+    report_markdown_path = artifact_path_for(run_paths, "reports", "final_report", suffix="md")
+    report_pdf_path = artifact_path_for(run_paths, "reports", "final_report", suffix="pdf")
     generated = build_report(
         topic=topic,
         lg_analysis=workflow_state.lg_lane.analysis_result,
@@ -136,16 +133,13 @@ def run_analysis_workflow(
         references=workflow_state.reference_result,
         llm_client=structured_llm,
         model=settings.default_model,
-        markdown_path=artifact_path_for(run_paths, "reports", "final_report", suffix="md"),
+        markdown_path=report_markdown_path,
     )
-    pdf_result = render_pdf_report(
-        generated.markdown,
-        artifact_path_for(run_paths, "reports", "final_report", suffix="pdf"),
-    )
+    pdf_result = render_pdf_report(report_markdown_path, report_pdf_path)
     workflow_state.report_artifact = ReportArtifact(
         title="Battery Market Strategy Analysis",
-        markdown_path=str(artifact_path_for(run_paths, "reports", "final_report", suffix="md")),
-        pdf_path=str(artifact_path_for(run_paths, "reports", "final_report", suffix="pdf")),
+        markdown_path=str(report_markdown_path),
+        pdf_path=str(report_pdf_path),
         partial=generated.partial or not pdf_result.success,
     )
     workflow_state.status = final_workflow_status(
@@ -155,6 +149,34 @@ def run_analysis_workflow(
     write_json(artifact_path_for(run_paths, "metadata", "workflow_state"), _workflow_state_dict(workflow_state))
     logger.info("workflow completed status=%s", workflow_state.status)
     return workflow_state
+
+
+def build_company_web_searchers(settings: Settings) -> tuple[object | None, object | None]:
+    if not settings.web_search_enabled or not settings.tavily_api_key:
+        return None, None
+
+    lg_calls, catl_calls = allocate_web_search_calls(settings.web_search_max_calls)
+    lg_searcher = build_tavily_web_searcher(
+        api_key=settings.tavily_api_key,
+        max_results=settings.web_search_max_results,
+        max_per_source=settings.web_search_max_per_source,
+        max_calls=lg_calls,
+    )
+    catl_searcher = build_tavily_web_searcher(
+        api_key=settings.tavily_api_key,
+        max_results=settings.web_search_max_results,
+        max_per_source=settings.web_search_max_per_source,
+        max_calls=catl_calls,
+    )
+    return lg_searcher, catl_searcher
+
+
+def allocate_web_search_calls(total_calls: int) -> tuple[int, int]:
+    if total_calls <= 0:
+        return 1, 1
+    lg_calls = max(1, total_calls // 2)
+    catl_calls = max(1, total_calls - lg_calls)
+    return lg_calls, catl_calls
 
 
 def build_local_retriever(
@@ -219,7 +241,14 @@ def _build_in_memory_retriever(
                 document_id=chunk.document_id,
                 text=chunk.text,
                 embedding=embedding,
-                metadata={"company": chunk.company, "topics": chunk.topics},
+                metadata={
+                    "company": chunk.company,
+                    "topics": chunk.topics,
+                    "source_type": chunk.source_type,
+                    "source": chunk.source,
+                    "title": chunk.title,
+                    "url": chunk.url,
+                },
             )
             for chunk, embedding in zip(chunks, embeddings)
         ]

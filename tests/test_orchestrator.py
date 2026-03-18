@@ -6,6 +6,45 @@ from unittest.mock import patch
 
 
 class OrchestratorTest(unittest.TestCase):
+    def test_allocate_web_search_calls_splits_evenly(self) -> None:
+        from battery_agent.pipeline.orchestrator import allocate_web_search_calls
+
+        self.assertEqual(allocate_web_search_calls(6), (3, 3))
+        self.assertEqual(allocate_web_search_calls(5), (2, 3))
+        self.assertEqual(allocate_web_search_calls(1), (1, 1))
+
+    def test_build_company_web_searchers_builds_two_searchers(self) -> None:
+        from battery_agent.config import Settings
+        from battery_agent.pipeline.orchestrator import build_company_web_searchers
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            settings = Settings(
+                openai_api_key="test-key",
+                default_companies=("LG에너지솔루션", "CATL"),
+                default_model="gpt-4o-mini",
+                embedding_model_id="Qwen/Qwen3-Embedding-0.6B",
+                default_topic="배터리 시장 전략 비교",
+                local_corpus_dir=Path(tmp_dir) / "corpus",
+                output_root=Path(tmp_dir) / "artifacts",
+                tavily_api_key="tvly-test",
+                web_search_enabled=True,
+                web_search_max_calls=6,
+                web_search_max_results=5,
+            )
+            settings.local_corpus_dir.mkdir(parents=True, exist_ok=True)
+
+            with patch(
+                "battery_agent.pipeline.orchestrator.build_tavily_web_searcher",
+                side_effect=["lg", "catl"],
+            ) as build_mock:
+                lg_searcher, catl_searcher = build_company_web_searchers(settings)
+
+        self.assertEqual(lg_searcher, "lg")
+        self.assertEqual(catl_searcher, "catl")
+        self.assertEqual(build_mock.call_count, 2)
+        self.assertEqual(build_mock.call_args_list[0].kwargs["max_calls"], 3)
+        self.assertEqual(build_mock.call_args_list[1].kwargs["max_calls"], 3)
+
     def test_orchestrator_runs_end_to_end_and_writes_outputs(self) -> None:
         from battery_agent.config import Settings
         from battery_agent.pipeline.orchestrator import run_analysis_workflow
