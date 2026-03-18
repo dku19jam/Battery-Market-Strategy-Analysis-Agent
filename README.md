@@ -1,4 +1,4 @@
-# Battery Agent 발표용 개요
+# 배터리 시장 전략 분석 Agent 개발
 
 ## 1. Overview
 - 목적: LG에너지솔루션과 CATL의 배터리 시장 전략을 비교 분석하고, 근거 기반 최종 보고서(Markdown/PDF)를 생성한다.
